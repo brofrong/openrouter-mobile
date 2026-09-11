@@ -8,7 +8,7 @@ Read before writing code.
 - Backend: Bun, Effect v4, @effect/platform-bun
 - Auth: Better Auth 1.7 (email/password), `@better-auth/expo`, `@better-auth/drizzle-adapter/relations-v2`
 - DB: PostgreSQL, drizzle-orm@rc, Relational Queries v2 (`defineRelations`)
-- Lint/format: Biome only
+- Lint/format: Biome only — `bun run check` / `bun run check:fix`. Never ESLint or Prettier.
 
 ## Skills (read the matching one before touching that area)
 - Effect code → `.cursor/skills/effect-this-repo/SKILL.md` and `.cursor/rules/effect.mdc`

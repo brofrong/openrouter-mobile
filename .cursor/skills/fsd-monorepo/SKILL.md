@@ -21,3 +21,5 @@ import direction `app → features → entities → shared`; features never impo
 - `packages/db` — tables + `defineRelations`
 
 Do not import `apps/server` from `apps/mobile`.
+
+Format/lint is `bun run check` (Biome), never eslint/prettier.
