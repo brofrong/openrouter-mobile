@@ -134,9 +134,36 @@ const HttpLive = HttpRouter.serve(RpcRoutes).pipe(
 
 HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Handlers: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })`.
 
-## Implementation target (T8)
+## Durable stream kernel (T8)
 
-Full kernel lives at `apps/server/src/features/durable-stream/DurableStream.ts` (file does not exist yet). Copy that subscribe/append once T8 lands; do not reinvent the algorithm.
+Copy these signatures from `apps/server/src/features/durable-stream/DurableStream.ts`. Do not reinvent the algorithm.
+
+Live layer: `apps/server/src/features/durable-stream/DurableStreamLive.ts` (`Layer.effect(DurableStream, makeDurableStream)`). Health does not provide `DbLive` into RPC — `Layer.provide(DbLive)` onto stream tests/handlers (`DurableStreamLive.pipe(Layer.provideMerge(DbLive))` in tests so `AppDb` stays available).
+
+```ts
+append(
+  streamId: string,
+  kind: "token" | "job",
+  payload: unknown,
+): Effect.Effect<StreamEvent, DurableStreamError>
+
+subscribe(
+  streamId: string,
+  afterSeq?: number,
+): Stream.Stream<StreamEvent, DurableStreamError>
+
+runInto(
+  streamId: string,
+  kind: "token" | "job",
+  source: Stream.Stream<unknown>,
+): Stream.Stream<StreamEvent, DurableStreamError>
+```
+
+`DurableStreamError` is `EffectDrizzleQueryError | Schema.SchemaError`.
+
+Producer (`append`): `INSERT … RETURNING` then `PubSub.publish`. Never publish first. `Semaphore.make(1)` around append so seq order is preserved.
+
+Consumer (`subscribe`): `Stream.unwrap` → `PubSub.subscribe` (wait until subscribed) → replay `db.query.streamEvents.findMany({ where: { streamId, seq: { gt: afterSeq ?? 0 } }, orderBy: { seq: "asc" } })` → `Stream.concat(replay, live.filter(seq > watermark && streamId))` → dedup by `seq`.
 
 - Source of truth: `stream_events(stream_id, seq, payload)`
 - In-memory PubSub is a live tail only — chunks still persist if nobody is connected
@@ -144,4 +171,4 @@ Full kernel lives at `apps/server/src/features/durable-stream/DurableStream.ts` 
 
 ## Later install tasks
 
-T8 / T11 must still patch this skill with durable-stream wiring and `RpcClient.make` / `RpcClient.layerProtocolHttp` client usage.
+T11 must still patch this skill with `RpcClient.make` / `RpcClient.layerProtocolHttp` client usage.
