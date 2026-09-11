@@ -9,10 +9,14 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.4",
+    "@better-auth/expo": "1.7.4",
     "@effect/platform-bun": "4.0.0-rc.113",
     "@effect/sql-pg": "4.0.0-rc.113",
     "@openrouter-mobile/db": "workspace:*",
+    "@openrouter-mobile/domain": "workspace:*",
     "@openrouter-mobile/rpc": "workspace:*",
+    "better-auth": "1.7.4",
     "drizzle-orm": "1.0.0-rc.5-ab785fc",
     "effect": "4.0.0-rc.113"
   },

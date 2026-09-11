@@ -8,4 +8,8 @@ export const AppConfig = Config.all({
     Config.withDefault(Redacted.make(defaultDatabaseUrl)),
   ),
   port: Config.Port("PORT").pipe(Config.withDefault(3000)),
+  betterAuthSecret: Config.Redacted("BETTER_AUTH_SECRET"),
+  betterAuthUrl: Config.String("BETTER_AUTH_URL").pipe(
+    Config.withDefault("http://localhost:3000"),
+  ),
 });

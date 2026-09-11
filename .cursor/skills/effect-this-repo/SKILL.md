@@ -115,4 +115,6 @@ Config.Port("PORT").pipe(Config.withDefault(3000))
 Config.all({ databaseUrl, port })
 ```
 
-T7.5 / T11 must still patch this file with Better Auth and mobile `ManagedRuntime` imports.
+Better Auth (T7.5, `better-auth@1.7.4`): `betterAuth` from `"better-auth"`, `drizzleAdapter` from `"@better-auth/drizzle-adapter/relations-v2"`, `expo` from `"@better-auth/expo"`. RPC middleware is `RpcMiddleware.Service` from `"effect/unstable/rpc"`. Session: `auth.api.getSession({ headers })`. See `.cursor/skills/better-auth/SKILL.md`.
+
+T11 must still patch this file with mobile `ManagedRuntime` imports.

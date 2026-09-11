@@ -14,7 +14,8 @@
   "dependencies": {
     "@effect/sql-pg": "4.0.0-rc.113",
     "drizzle-orm": "1.0.0-rc.5-ab785fc",
-    "effect": "4.0.0-rc.113"
+    "effect": "4.0.0-rc.113",
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "drizzle-kit": "1.0.0-rc.5-ab785fc"

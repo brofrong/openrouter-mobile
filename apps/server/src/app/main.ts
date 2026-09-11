@@ -1,33 +1,32 @@
 import { BunHttpServer } from "@effect/platform-bun";
-import { HealthRpcs } from "@openrouter-mobile/rpc";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { ChatLive } from "../features/chat/ChatLive";
 import { HealthLive } from "../features/health/HealthLive";
+import { AuthHttpLive } from "../shared/AuthHttp";
+import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
 import { BunRuntime } from "../shared/runtime";
+import { ServerRpcs } from "./ServerRpcs";
 
 const RpcHttp = RpcServer.layerHttp({
-  group: HealthRpcs,
+  group: ServerRpcs,
   path: "/rpc",
   protocol: "http",
 });
 
 const RpcWs = RpcServer.layerHttp({
-  group: HealthRpcs,
+  group: ServerRpcs,
   path: "/rpc/ws",
   protocol: "websocket",
 });
 
-/**
- * T7.5 mounts Better Auth on GET+POST `/api/auth/*`.
- * Keep this layer in `HttpRouter.serve` so auth routes share the same server.
- */
-const AuthHttpLive = Layer.empty;
-
 const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
   Layer.provide(HealthLive),
+  Layer.provide(ChatLive),
+  Layer.provide(AuthMiddlewareLive),
   Layer.provide(RpcSerialization.layerNdjson),
 );
 
