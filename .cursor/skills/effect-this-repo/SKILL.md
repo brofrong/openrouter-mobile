@@ -93,6 +93,26 @@ import { Rpc, RpcGroup } from "effect/unstable/rpc"
 
 Contract package: `@openrouter-mobile/rpc` (`AppRpcs` = `ChatRpcs.merge(JobRpcs, MediaRpcs, HealthRpcs)`). See `.cursor/skills/effect-rpc-streams/SKILL.md` for `Rpc.make` / `RpcGroup.make` signatures.
 
-## Later install tasks
+## Server runtime (copied from `@effect/platform-bun@4.0.0-rc.113`)
 
-T7–T7.5 and T11 must still patch this file with real import paths from the installed packages (platform-bun, sql-pg, ManagedRuntime). Schema and Rpc APIs above are from the installed `effect` and should be reused as-is.
+HTTP lives in `effect/unstable/http`, not `@effect/platform`. Bun adapters:
+
+```ts
+import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
+```
+
+- `BunHttpServer.layer({ hostname: "0.0.0.0", port: 3000 })` → `Layer<HttpServer | HttpPlatform | Etag.Generator | BunServices, ServeError>`
+- Always pass `hostname` as an IP. Omitting it makes Bun report `hostname: "localhost"`, and `NetAddress.inetAddressFromIpString` then fails (`expected exactly four decimal octets`).
+- `BunRuntime.runMain(Layer.launch(Main))`
+
+Config (Effect 4, not v3 `Config.string`):
+
+```ts
+import { Config, Redacted } from "effect"
+
+Config.Redacted("DATABASE_URL")
+Config.Port("PORT").pipe(Config.withDefault(3000))
+Config.all({ databaseUrl, port })
+```
+
+T7.5 / T11 must still patch this file with Better Auth and mobile `ManagedRuntime` imports.

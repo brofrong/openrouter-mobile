@@ -5,7 +5,7 @@ description: Drizzle ORM rc Relational Queries v2 with defineRelations and the E
 
 # Drizzle Relational Queries v2
 
-Installed: `drizzle-orm@1.0.0-rc.4` + `drizzle-kit@1.0.0-rc.4` + `@effect/sql-pg@4.0.0-rc.113` (peer `effect@4.0.0-rc.113`).
+Installed: `drizzle-orm@1.0.0-rc.5-ab785fc` + `drizzle-kit@1.0.0-rc.5-ab785fc` + `@effect/sql-pg@4.0.0-rc.113` (peer `effect@4.0.0-rc.113`). Pin this drizzle pair — `1.0.0-rc.4` crashes at import (`Schema.TaggedErrorClass` was removed in Effect 4 rc).
 
 - Relations via `defineRelations` in `packages/db/src/relations.ts`, NOT per-table `relations()`
 - Pass `relations` into `drizzle()` / `PgDrizzle.make({ relations })` — do **not** pass a v1 schema bag as the RQB config
@@ -108,7 +108,7 @@ There is no `PgDrizzle` namespace export. Docs comments call it `PgDrizzle.make`
 
 ```ts
 import * as PgDrizzle from "drizzle-orm/effect-postgres"
-import { PgClient } from "@effect/sql-pg/PgClient"
+import { PgClient } from "@effect/sql-pg/PgClient" // service tag; `layer` is `import { PgClient } from "@effect/sql-pg"`
 
 const db = yield* PgDrizzle.make({ relations }).pipe(
   Effect.provide(PgDrizzle.DefaultServices),
@@ -129,18 +129,40 @@ declare const make: <TRelations extends AnyRelations = EmptyRelations>(
 
 `DrizzleConfig` (`drizzle-orm/utils.d.ts`) has both `schema?` (v1) and `relations?` (v2). Pass **`relations`**.
 
-`@effect/sql-pg@4.0.0-rc.113` `PgClient.layer`:
+`@effect/sql-pg@4.0.0-rc.113` — `layer` is a named export of the `PgClient` **module**, not a method on the service tag. Import the namespace:
 
 ```ts
-import { PgClient } from "@effect/sql-pg/PgClient"
+import { PgClient } from "@effect/sql-pg"
+import { Config, Effect, Layer, Redacted } from "effect"
+
+PgClient.layer({ url: Redacted.make(databaseUrl) })
+// PgClient.PgClient is the Context.Service tag
 
 export declare const layer: (
   config: PgPoolConfig,
 ) => Layer.Layer<PgClient | Client.SqlClient, SqlError>
 ```
 
+Server wiring in `apps/server/src/shared/db.ts`:
+
+```ts
+const PgLive = Layer.unwrap(
+  Effect.map(AppConfig, ({ databaseUrl }) =>
+    PgClient.layer({ url: databaseUrl }),
+  ),
+)
+
+export const DbLive = Layer.effect(
+  AppDb,
+  PgDrizzle.makeWithDefaults({ relations }),
+).pipe(Layer.provide(PgLive))
+```
+
+`makeWithDefaults` is `make` + `DefaultServices` (only requires `PgClient`).
+
 ## Kit
 
 `packages/db/drizzle.config.ts` — `defineConfig` from `drizzle-kit`, `dialect: "postgresql"`, `schema: "./src/schema/index.ts"`, `out: "./drizzle"`.
 
-Generate: `bunx drizzle-kit generate` in `packages/db`.
+Generate: `bun run --filter @openrouter-mobile/db db:generate`  
+Migrate: `bun run db:migrate` (root) or `bun run --filter @openrouter-mobile/db db:migrate`.

@@ -8,14 +8,15 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun --bun drizzle-kit migrate"
   },
   "dependencies": {
     "@effect/sql-pg": "4.0.0-rc.113",
-    "drizzle-orm": "^1.0.0-rc.4",
+    "drizzle-orm": "1.0.0-rc.5-ab785fc",
     "effect": "4.0.0-rc.113"
   },
   "devDependencies": {
-    "drizzle-kit": "^1.0.0-rc.4"
+    "drizzle-kit": "1.0.0-rc.5-ab785fc"
   }
 }

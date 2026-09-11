@@ -6,8 +6,8 @@ alwaysApply: false
 
 # Effect RPC + streams
 
-- API is `@effect/rpc` only (not tRPC, oRPC, REST, Socket.IO).
-- Transports: `RpcServer.layerProtocolHttp` and `layerProtocolWebsocket` only.
+- API is `effect/unstable/rpc` only (not tRPC, oRPC, REST, Socket.IO). `@effect/rpc` is not published on Effect 4 rc.
+- Transports: `RpcServer.layerHttp({ protocol: "http" })` / `layerProtocolHttp` and `layerHttp({ protocol: "websocket" })` / `layerProtocolWebsocket` only.
 - Client payload always has `afterSeq: Schema.optionalKey(Schema.Number)`.
 - Client stores last `seq` from the stream and sends it on reconnect.
 

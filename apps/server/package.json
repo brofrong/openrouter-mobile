@@ -1,5 +1,23 @@
 {
   "name": "@openrouter-mobile/server",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/app/main.ts",
+    "start": "bun src/app/main.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "4.0.0-rc.113",
+    "@effect/sql-pg": "4.0.0-rc.113",
+    "@openrouter-mobile/db": "workspace:*",
+    "@openrouter-mobile/rpc": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.5-ab785fc",
+    "effect": "4.0.0-rc.113"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.2",
+    "typescript": "7.0.2"
+  }
 }

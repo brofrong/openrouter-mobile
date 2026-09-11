@@ -77,15 +77,28 @@ merge<const Groups extends ReadonlyArray<Any>>(
 
 Handlers later: `Group.toLayer({ ... })` / `toLayerHandler`.
 
-### Protocol Layers (T7 still patches these with wiring)
+### Protocol Layers (copied from `effect@4.0.0-rc.113` `RpcServer.ts`)
 
-From `RpcServer` in the same module:
+HTTP router is `effect/unstable/http` (`HttpRouter`), not `@effect/platform`. NDJSON: `RpcSerialization.layerNdjson`.
+
+`Protocol` is a single service — HTTP and WebSocket each need their own `RpcServer.layer` / `layerHttp` (do not `Layer.provide` both protocol layers onto one server).
 
 ```ts
+import { HttpRouter } from "effect/unstable/http"
+import { RpcSerialization, RpcServer } from "effect/unstable/rpc"
+import { BunHttpServer } from "@effect/platform-bun"
+
 export const layer = <Rpcs extends Rpc.Any>(
   group: RpcGroup.RpcGroup<Rpcs>,
   options?: { ... }
 ): Layer.Layer<never, never, Protocol | Rpc.ToHandler<Rpcs> | ...>
+
+export const layerHttp = <Rpcs extends Rpc.Any>(options: {
+  readonly group: RpcGroup.RpcGroup<Rpcs>
+  readonly path: HttpRouter.PathInput
+  readonly protocol?: "http" | "websocket" | undefined
+  ...
+}): Layer.Layer<never, never, RpcSerialization | HttpRouter | Rpc.ToHandler<Rpcs> | ...>
 
 export const layerProtocolHttp = (options: {
   readonly path: HttpRouter.PathInput
@@ -97,7 +110,29 @@ export const layerProtocolWebsocket = (options: {
 }): Layer.Layer<Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 ```
 
-`RpcSerialization.layerNdjson` exists. HTTP router is `effect/unstable/http` (`HttpRouter`), not `@effect/platform`.
+Server wiring in `apps/server/src/app/main.ts`:
+
+```ts
+const RpcHttp = RpcServer.layerHttp({
+  group: HealthRpcs,
+  path: "/rpc",
+  protocol: "http",
+})
+const RpcWs = RpcServer.layerHttp({
+  group: HealthRpcs,
+  path: "/rpc/ws",
+  protocol: "websocket",
+})
+const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs).pipe(
+  Layer.provide(HealthLive),
+  Layer.provide(RpcSerialization.layerNdjson),
+)
+const HttpLive = HttpRouter.serve(RpcRoutes).pipe(
+  Layer.provide(BunHttpServer.layer({ hostname: "0.0.0.0", port: 3000 })),
+)
+```
+
+HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Handlers: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })`.
 
 ## Implementation target (T8)
 
@@ -109,4 +144,4 @@ Full kernel lives at `apps/server/src/features/durable-stream/DurableStream.ts` 
 
 ## Later install tasks
 
-T7 / T8 / T11 must still patch this skill with real `RpcClient` / protocol Layer **wiring** from the installed `effect/unstable/rpc` (import path and `Rpc.make` / `RpcGroup.make` signatures above are from `effect@4.0.0-rc.113`).
+T8 / T11 must still patch this skill with durable-stream wiring and `RpcClient.make` / `RpcClient.layerProtocolHttp` client usage.

@@ -7,7 +7,7 @@ alwaysApply: false
 # Drizzle (RQB v2)
 
 ## Do
-- `drizzle-orm@rc` + `drizzle-kit@rc`
+- `drizzle-orm@1.0.0-rc.5-ab785fc` + `drizzle-kit@1.0.0-rc.5-ab785fc` (pin; rc.4 is incompatible with Effect 4 rc)
 - Relations via `defineRelations` in `packages/db/src/relations.ts`
 - Pass `relations` into `drizzle()` / `PgDrizzle.make({ relations })`
 - Effect driver: `drizzle-orm/effect-postgres` + `@effect/sql-pg`
