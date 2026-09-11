@@ -13,6 +13,7 @@
       "!**/.turbo",
       "!**/dist",
       "!**/bun.lock",
+      "!**/packages/db/drizzle",
       "!**/.expo",
       "!**/web-build",
       "!**/apps/mobile/ios",

@@ -1,5 +1,21 @@
 {
   "name": "@openrouter-mobile/db",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@effect/sql-pg": "4.0.0-rc.113",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "effect": "4.0.0-rc.113"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^1.0.0-rc.4"
+  }
 }
