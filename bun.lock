@@ -66,6 +66,10 @@
     "packages/rpc": {
       "name": "@openrouter-mobile/rpc",
       "version": "0.0.0",
+      "dependencies": {
+        "@openrouter-mobile/domain": "workspace:*",
+        "effect": "4.0.0-rc.113",
+      },
     },
   },
   "packages": {

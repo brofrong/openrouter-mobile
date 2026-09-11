@@ -1,5 +1,16 @@
 {
   "name": "@openrouter-mobile/rpc",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openrouter-mobile/domain": "workspace:*",
+    "effect": "4.0.0-rc.113"
+  }
 }

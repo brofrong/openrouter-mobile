@@ -83,6 +83,16 @@ Schema.Unknown
 - `Schema.DateTimeUtc` — validates `DateTime.Utc`. Default JSON codec decodes UTC ISO strings and encodes UTC ISO strings. Related: `DateTimeUtcFromString`, `DateTimeUtcFromDate`, `DateTimeUtcFromMillis`.
 - `Schema.brand("UserId")` — nominal brand only (no extra runtime checks). Use as `Schema.String.pipe(Schema.brand("UserId"))`. Type: `typeof UserId.Type`.
 
+## Rpc (copied from effect@4.0.0-rc.113)
+
+`@effect/rpc` is not published on this rc line. Import from the `effect` package:
+
+```ts
+import { Rpc, RpcGroup } from "effect/unstable/rpc"
+```
+
+Contract package: `@openrouter-mobile/rpc` (`AppRpcs` = `ChatRpcs.merge(JobRpcs, MediaRpcs, HealthRpcs)`). See `.cursor/skills/effect-rpc-streams/SKILL.md` for `Rpc.make` / `RpcGroup.make` signatures.
+
 ## Later install tasks
 
-T6–T7.5 and T11 must still patch this file with real import paths from the installed `@effect/*` packages (Rpc, platform-bun, sql-pg, ManagedRuntime). Schema APIs above are from the installed `effect` and should be reused as-is.
+T7–T7.5 and T11 must still patch this file with real import paths from the installed packages (platform-bun, sql-pg, ManagedRuntime). Schema and Rpc APIs above are from the installed `effect` and should be reused as-is.
