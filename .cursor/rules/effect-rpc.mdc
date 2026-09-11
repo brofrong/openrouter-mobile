@@ -1,0 +1,21 @@
+---
+description: Effect RPC transports and durable stream reconnect
+globs: packages/rpc/**/*.ts,apps/server/**/*.ts,apps/mobile/src/shared/rpc.ts
+alwaysApply: false
+---
+
+# Effect RPC + streams
+
+- API is `@effect/rpc` only (not tRPC, oRPC, REST, Socket.IO).
+- Transports: `RpcServer.layerProtocolHttp` and `layerProtocolWebsocket` only.
+- Client payload always has `afterSeq: Schema.optionalKey(Schema.Number)`.
+- Client stores last `seq` from the stream and sends it on reconnect.
+
+## Producer
+Persist to `stream_events` → then publish. Never publish first.
+
+## Consumer
+Subscribe live (wait until subscribed) → replay `seq > afterSeq` → concat live filtered `seq > max(replayed)`.
+
+Implementation (T8): `apps/server/src/features/durable-stream/DurableStream.ts`.
+Read `.cursor/skills/effect-rpc-streams/SKILL.md`.

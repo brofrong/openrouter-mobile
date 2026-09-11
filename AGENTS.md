@@ -16,7 +16,7 @@ Read before writing code.
 - Drizzle → `.cursor/skills/drizzle-rqb2/SKILL.md`
 - Expo/Tamagui → `.cursor/skills/expo-tamagui/SKILL.md`
 - Folder structure → `.cursor/skills/fsd-monorepo/SKILL.md`
-- Auth → `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skill pack
+- Auth → `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skill pack at `.cursor/skills/better-auth-official/` (CLI copy also in `.agents/skills/`)
 
 ## Hard rules
 - OpenRouter API key never leaves `apps/server`

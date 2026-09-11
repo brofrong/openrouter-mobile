@@ -1,0 +1,20 @@
+---
+description: Feature-Sliced Design import direction for apps
+globs: "apps/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Feature-Sliced Design
+
+Import direction: `app → features → entities → shared`.
+
+## Do
+- Features import entities and shared only
+- RPC types come from `packages/rpc`, never duplicated in the UI
+- Domain DTOs come from `packages/domain`
+
+## Do not
+- Features importing other features
+- Copying RPC payload types into `apps/mobile`
+
+Read `.cursor/skills/fsd-monorepo/SKILL.md`.

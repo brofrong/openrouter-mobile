@@ -1,0 +1,29 @@
+---
+description: Effect v4 patterns — gen, Layers, Schema, runtimes
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Effect v4
+
+## Do
+- `Effect.gen(function* () { const x = yield* Service })`
+- Errors as `Schema.TaggedError` / `Data.TaggedError`
+- Wire dependencies with `Layer.provide` / `Layer.mergeAll`
+- Server entry: `BunRuntime.runMain(Layer.launch(Main))`
+- Mobile entry: one `ManagedRuntime` in `apps/mobile/src/shared/runtime.ts`
+- Streams: `Stream`, never ad-hoc callback accumulation for OpenRouter
+
+## Do not
+- `try/catch` around Effect programs
+- `Effect.runPromise` inside React render (only inside runtime / event handlers)
+- Zod, io-ts, yup
+- Newing services (`new Foo()`) instead of `Context.Service` + Layer
+- Importing `apps/server` from `apps/mobile`
+
+## Schema
+- `Schema.Class` in `packages/domain` for DTOs
+- RPC payload/success/error use those classes
+- Decode at the boundary; inside the app use the decoded type
+
+Read `.cursor/skills/effect-this-repo/SKILL.md` before writing Effect code.

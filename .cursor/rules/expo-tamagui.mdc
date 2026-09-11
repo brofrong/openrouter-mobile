@@ -1,0 +1,21 @@
+---
+description: Expo SDK 57 and Tamagui v5 client conventions
+globs: "apps/mobile/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Expo + Tamagui
+
+## Do
+- Expo SDK 57, Expo Router tabs
+- Scheme: `openrouter-mobile`
+- Tamagui: `createTamagui` from `@tamagui/config/v5`
+- Effect HTTP: `expo/fetch` for FetchHttpClient
+- WebSocket: `binaryType = "arraybuffer"`
+- Upload files via HTTP, then pass the id over RPC
+
+## Do not
+- Nested `File` in RPC payloads
+- Import `apps/server` from the mobile app
+
+Read `.cursor/skills/expo-tamagui/SKILL.md`.

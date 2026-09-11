@@ -1,0 +1,24 @@
+---
+description: Better Auth 1.7 with Expo and Drizzle Relations v2
+globs: apps/server/**/*auth*,apps/mobile/**/*auth*
+alwaysApply: false
+---
+
+# Better Auth
+
+## Do
+- Packages: `better-auth`, `@better-auth/expo`, `@better-auth/drizzle-adapter`
+- Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2`, provider `"pg"`
+- Server plugin: `expo()` from `@better-auth/expo`
+- Mount `auth.handler` on GET+POST `/api/auth/*` (HTTP, not Effect RPC)
+- Email/password enabled; do not require email verification for MVP
+- Env: `BETTER_AUTH_SECRET` (>=32 chars), `BETTER_AUTH_URL`
+- Expo: `createAuthClient` from `better-auth/react` + `expoClient` + `expo-secure-store`
+- RPC: `headers: { Cookie: await authClient.getCookie() }`, `credentials: "omit"` on native
+- Session: `auth.api.getSession({ headers: requestHeaders })`
+
+## Do not
+- NextAuth, Clerk, custom JWT
+- Require email verification for MVP
+
+Read `.cursor/skills/better-auth/SKILL.md` and `.cursor/skills/better-auth-official/`.
