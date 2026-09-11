@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { chats, messages, streamEvents, user } from "@openrouter-mobile/db";
-import type { AppError } from "@openrouter-mobile/domain";
+import { AppError } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
 import { Effect, Fiber, Layer, Result, type Scope, Stream } from "effect";
 import {
@@ -16,7 +16,11 @@ import {
 } from "../src/features/chat/OpenRouterChat";
 import type { DurableStream } from "../src/features/durable-stream/DurableStream";
 import { DurableStreamLive } from "../src/features/durable-stream/DurableStreamLive";
-import { CurrentSession } from "../src/shared/AuthMiddleware";
+import {
+  AuthMiddleware,
+  AuthMiddlewareLive,
+  CurrentSession,
+} from "../src/shared/AuthMiddleware";
 import type { Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
 import { isUsableOpenRouterKeyValue } from "../src/shared/openrouter";
@@ -140,6 +144,43 @@ const isNotFound = (result: Result.Result<unknown, AppError>) =>
   result.failure._tag === "AppError" &&
   result.failure.code === "NOT_FOUND";
 
+const isCode = (
+  result: Result.Result<unknown, unknown>,
+  code: AppError["code"],
+) =>
+  Result.isFailure(result) &&
+  result.failure instanceof AppError &&
+  result.failure.code === code;
+
+const OpenRouterFailLive = Layer.succeed(OpenRouterChat, {
+  complete: () =>
+    Effect.succeed(
+      Stream.make("Hel").pipe(
+        Stream.concat(
+          Stream.fail(
+            new AppError({
+              code: "OPENROUTER",
+              message: "upstream failed",
+            }),
+          ),
+        ),
+      ),
+    ),
+});
+
+const FailLive = Layer.mergeAll(DurableStreamLive, OpenRouterFailLive).pipe(
+  Layer.provideMerge(DbLive),
+);
+
+const runFail = <A, E>(
+  effect: Effect.Effect<
+    A,
+    E,
+    AppDb | DurableStream | OpenRouterChat | Scope.Scope
+  >,
+): Promise<A> =>
+  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(FailLive)));
+
 test("ChatList is empty for a new user", async () => {
   const listed = await run(
     Effect.gen(function* () {
@@ -255,6 +296,61 @@ test("another user's chatId is NOT_FOUND", async () => {
   expect(isNotFound(result.messagesResult)).toBe(true);
   expect(isNotFound(result.sendResult)).toBe(true);
   expect(isNotFound(result.subscribeResult)).toBe(true);
+});
+
+test("ChatList without a session cookie is UNAUTHORIZED", async () => {
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const middleware = yield* AuthMiddleware;
+      return yield* middleware(
+        listChats as never,
+        {
+          headers: {},
+        } as never,
+      ).pipe(Effect.result);
+    }).pipe(Effect.scoped, Effect.provide(AuthMiddlewareLive)),
+  );
+
+  expect(isCode(result, "UNAUTHORIZED")).toBe(true);
+});
+
+test("ChatSubscribe fails with OPENROUTER when generation errors", async () => {
+  const result = await runFail(
+    Effect.gen(function* () {
+      const session = yield* insertUser("openrouter-error");
+      const chat = yield* asUser(session, createChat);
+      const userMessage = yield* asUser(
+        session,
+        sendMessage({ chatId: chat.id, content: "hi" }),
+      );
+      const seen: Array<string> = [];
+      const subscribeResult = yield* asUser(
+        session,
+        subscribeTokens(chat.id, 0).pipe(
+          Stream.tap((chunk) => Effect.sync(() => seen.push(chunk.text))),
+          Stream.runCollect,
+        ),
+      ).pipe(Effect.timeout("2 seconds"), Effect.result);
+      const db = yield* AppDb;
+      const events = yield* db.query.streamEvents.findMany({
+        where: { streamId: chat.id },
+        orderBy: { seq: "asc" },
+      });
+      return { userMessage, seen, subscribeResult, events };
+    }),
+  );
+
+  expect(result.userMessage.content).toBe("hi");
+  expect(result.seen).toEqual(["Hel"]);
+  expect(isCode(result.subscribeResult, "OPENROUTER")).toBe(true);
+  expect(
+    result.events.some(
+      (event) =>
+        event.payload !== null &&
+        typeof event.payload === "object" &&
+        "error" in event.payload,
+    ),
+  ).toBe(true);
 });
 
 (hasRealOpenRouterKey ? test : test.skip)(

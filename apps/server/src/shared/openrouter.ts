@@ -59,36 +59,40 @@ export const openRouterTokenStream = (options: {
   readonly referer: string;
   readonly messages: ReadonlyArray<OpenRouterMessage>;
 }): Effect.Effect<Stream.Stream<string, AppError>, AppError> =>
-  Effect.gen(function* () {
-    const request = HttpClientRequest.post(
-      OPENROUTER_CHAT_COMPLETIONS_URL,
-    ).pipe(
-      HttpClientRequest.bearerToken(options.apiKey),
-      HttpClientRequest.setHeader("HTTP-Referer", options.referer),
-      HttpClientRequest.setHeader("X-Title", "openrouter-mobile"),
-      HttpClientRequest.bodyJsonUnsafe({
-        model: options.model,
-        messages: options.messages,
-        stream: true,
+  Effect.succeed(
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const request = HttpClientRequest.post(
+          OPENROUTER_CHAT_COMPLETIONS_URL,
+        ).pipe(
+          HttpClientRequest.bearerToken(options.apiKey),
+          HttpClientRequest.setHeader("HTTP-Referer", options.referer),
+          HttpClientRequest.setHeader("X-Title", "openrouter-mobile"),
+          HttpClientRequest.bodyJsonUnsafe({
+            model: options.model,
+            messages: options.messages,
+            stream: true,
+          }),
+        );
+        const response = yield* options.http.execute(request).pipe(
+          Effect.flatMap(HttpClientResponse.filterStatusOk),
+          Effect.mapError(() =>
+            openRouterFailed("OpenRouter chat completions request failed"),
+          ),
+        );
+        return response.stream.pipe(
+          Stream.decodeText(),
+          Stream.splitLines,
+          Stream.takeUntil(
+            (line) =>
+              line.trim() === "data: [DONE]" || line.trim() === "data:[DONE]",
+            { excludeLast: true },
+          ),
+          Stream.map(parseOpenRouterSseLine),
+          Stream.filter(Option.isSome),
+          Stream.map((option) => option.value),
+          Stream.mapError(() => openRouterFailed("OpenRouter stream failed")),
+        );
       }),
-    );
-    const response = yield* options.http.execute(request).pipe(
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.mapError(() =>
-        openRouterFailed("OpenRouter chat completions request failed"),
-      ),
-    );
-    return response.stream.pipe(
-      Stream.decodeText(),
-      Stream.splitLines,
-      Stream.takeUntil(
-        (line) =>
-          line.trim() === "data: [DONE]" || line.trim() === "data:[DONE]",
-        { excludeLast: true },
-      ),
-      Stream.map(parseOpenRouterSseLine),
-      Stream.filter(Option.isSome),
-      Stream.map((option) => option.value),
-      Stream.mapError(() => openRouterFailed("OpenRouter stream failed")),
-    );
-  });
+    ),
+  );
