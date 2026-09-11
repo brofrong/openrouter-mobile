@@ -5,12 +5,13 @@ node_modules
 .pnp
 .pnp.js
 
-# Local env files
+# Local env files (.env.example is committed with placeholders)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+!.env.example
 
 # Testing
 coverage
