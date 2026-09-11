@@ -5,20 +5,93 @@ description: Expo SDK 57 and Tamagui v5 conventions for the mobile app — fetch
 
 # Expo + Tamagui
 
-Expo 57, `expo/fetch` for Effect FetchHttpClient, WebSocket `binaryType = "arraybuffer"`, Tamagui `createTamagui` from `@tamagui/config/v5`, Expo Router tabs, scheme `openrouter-mobile`, no nested `File` in RPC payloads (upload via HTTP then RPC id).
+Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@~57.0.21`), Tamagui **2.7.7** (`tamagui@^2.7.7`, `@tamagui/config@^2.7.7`). Config API is still **v5**. Pin `typescript@~6.0.3` in this package; do not typecheck Expo with root `typescript@7.0.2`.
 
 ## Do
 - Expo SDK 57, Expo Router tabs under `apps/mobile/src/app/(tabs)/`
 - Scheme: `openrouter-mobile` (Better Auth deep links)
-- Tamagui: `createTamagui` from `@tamagui/config/v5`
-- Effect HTTP: `expo/fetch` for FetchHttpClient
+- Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
+- Effect HTTP: `expo/fetch` for FetchHttpClient (wire in T11)
 - WebSocket: `binaryType = "arraybuffer"`
 - Upload files via HTTP, then pass the returned id over RPC
 
 ## Do not
 - Nested `File` in RPC payloads
 - Import `apps/server` from `apps/mobile`
+- Install TanStack Query
+- Force root TypeScript 7 onto the Expo app
+
+## Tamagui config (from `@tamagui/config@2.7.7`)
+
+Package exports that exist: `.`, `./v3`, `./v4`, `./v5`, `./v5-css`, `./v5-rn`, `./v5-reanimated`, `./v5-motion`, `./v5-subtle`, `./reanimated`.
+
+`defaultConfig` has **no animations**. This app uses the RN driver (works web + native without generated CSS):
+
+```ts
+import { defaultConfig } from "@tamagui/config/v5";
+import { animations } from "@tamagui/config/v5-rn";
+import { createTamagui } from "tamagui";
+
+export const tamaguiConfig = createTamagui({
+  ...defaultConfig,
+  animations,
+});
+
+export default tamaguiConfig;
+
+export type Conf = typeof tamaguiConfig;
+
+declare module "tamagui" {
+  interface TamaguiCustomConfig extends Conf {}
+}
+```
+
+Provider (from `tamagui/types/views/TamaguiProvider.d.ts`):
+
+```ts
+import { TamaguiProvider } from "tamagui";
+import { tamaguiConfig } from "../../tamagui.config";
+
+<TamaguiProvider config={tamaguiConfig} defaultTheme={themeName}>
+```
+
+v5 `settings.onlyAllowShorthands` is `true`: use `p` not `padding`, `bg` not `backgroundColor`. `flex` and `gap` have no shorthand and stay as-is.
+
+UI primitives from `tamagui`: `YStack`, `XStack`, `H1`/`H2`, `Paragraph`, `Text`.
+
+## Expo Router file paths
+
+`main` is `expo-router/entry`. Routes live in `src/app` (not repo-root `app/`).
+
+| File | Role |
+| --- | --- |
+| `apps/mobile/src/app/_layout.tsx` | `TamaguiProvider` + `ThemeProvider` + `Stack` |
+| `apps/mobile/src/app/(tabs)/_layout.tsx` | Tabs: Chat, Images, Video, Speech, Audio |
+| `apps/mobile/src/app/(tabs)/index.tsx` | Chat placeholder |
+| `apps/mobile/src/app/(tabs)/images.tsx` | Images placeholder |
+| `apps/mobile/src/app/(tabs)/video.tsx` | Video placeholder |
+| `apps/mobile/src/app/(tabs)/speech.tsx` | Speech placeholder |
+| `apps/mobile/src/app/(tabs)/audio.tsx` | Audio placeholder |
+| `apps/mobile/tamagui.config.ts` | `createTamagui` config |
+| `apps/mobile/app.json` | `scheme: "openrouter-mobile"` |
+
+SDK 57 deprecates `import { Tabs } from "expo-router"`. Use:
+
+```ts
+import { Tabs } from "expo-router/js-tabs";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+```
+
+Start: `bun run --filter @openrouter-mobile/mobile dev` or `bun run --filter @openrouter-mobile/mobile start`. Web: `bun run --filter @openrouter-mobile/mobile web`.
+
+## Metro / package-exports (Better Auth later)
+
+- `apps/mobile/metro.config.js` is `getDefaultConfig(__dirname)` from `expo/metro-config`. SDK 52+ auto-detects Bun workspaces; do not set `watchFolders` / `nodeModulesPaths` unless something breaks.
+- Bun 1.4 isolated linker stores packages under `node_modules/.bun`. Expo SDK 54+ supports that.
+- Metro package exports are **on by default** in SDK 57. Keep them on: Better Auth will import `better-auth/react` and `@better-auth/expo/client`.
+- If those subpaths fail, check `resolver.unstable_enablePackageExports` is true (default). Do not disable package exports to “fix” Tamagui.
+- `@tamagui/config/v5` and `@tamagui/config/v5-rn` are conditional exports (`react-native` / `browser` / `import` / `require`). Metro must keep those conditions.
 
 ## Later install tasks
 
-T4 / T11 must patch this skill with the exact Tamagui config import and FetchHttpClient + websocket wiring from the installed packages.
+T11 must patch this skill with FetchHttpClient (`expo/fetch`) + websocket + `authClient.getCookie()` wiring from the installed packages.

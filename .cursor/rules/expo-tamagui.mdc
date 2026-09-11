@@ -9,7 +9,7 @@ alwaysApply: false
 ## Do
 - Expo SDK 57, Expo Router tabs
 - Scheme: `openrouter-mobile`
-- Tamagui: `createTamagui` from `@tamagui/config/v5`
+- Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
 - Effect HTTP: `expo/fetch` for FetchHttpClient
 - WebSocket: `binaryType = "arraybuffer"`
 - Upload files via HTTP, then pass the id over RPC

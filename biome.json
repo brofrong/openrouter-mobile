@@ -12,7 +12,12 @@
       "!**/node_modules",
       "!**/.turbo",
       "!**/dist",
-      "!**/bun.lock"
+      "!**/bun.lock",
+      "!**/.expo",
+      "!**/web-build",
+      "!**/apps/mobile/ios",
+      "!**/apps/mobile/android",
+      "!**/apps/mobile/assets"
     ]
   },
   "formatter": {
