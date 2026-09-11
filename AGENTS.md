@@ -16,7 +16,7 @@ Read before writing code.
 - Drizzle → `.cursor/skills/drizzle-rqb2/SKILL.md`
 - Expo/Tamagui → `.cursor/skills/expo-tamagui/SKILL.md`
 - Folder structure → `.cursor/skills/fsd-monorepo/SKILL.md`
-- Auth → `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skill pack at `.cursor/skills/better-auth-official/` (CLI copy also in `.agents/skills/`)
+- Auth → `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skill pack at `.cursor/skills/better-auth-official/`
 
 ## Hard rules
 - OpenRouter API key never leaves `apps/server`
@@ -24,3 +24,4 @@ Read before writing code.
 - Reconnect protocol: subscribe live → replay DB `seq > afterSeq` → tail live, dedup by seq
 - Effect Schema only (no Zod)
 - Auth is Better Auth only (no NextAuth, Clerk, custom JWT). RPC requires a session cookie.
+- MVP auth: email/password only. Do not require email verification; do not add OAuth, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.

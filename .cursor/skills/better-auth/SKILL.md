@@ -17,7 +17,7 @@ description: How this repo uses Better Auth 1.7 with Expo and Drizzle Relations 
 - Schema via `bun x auth@latest generate` then merge auth relations into `defineRelations` with `{ ...appRelations, ...authRelations }`
 - Docs: https://better-auth.com/docs/integrations/expo and https://better-auth.com/docs/adapters/drizzle
 
-Official Better Auth skill pack: `.cursor/skills/better-auth-official/` (also installed at `.agents/skills/`). Prefer this repo skill for stack choices (Expo + Drizzle RQB v2 + Effect RPC cookies); use the official pack for library API details.
+Official Better Auth skill pack: `.cursor/skills/better-auth-official/`. Prefer this repo skill for stack and MVP scope: no email verification, adapter path `@better-auth/drizzle-adapter/relations-v2` (not `better-auth/adapters/drizzle`), and no Next.js/Prisma handlers. Use the official pack for library API details.
 
 ## Later install tasks
 

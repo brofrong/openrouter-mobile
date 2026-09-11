@@ -36,3 +36,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# skills CLI reinstalls here; official pack lives in .cursor/skills/better-auth-official/
+.agents/skills/
