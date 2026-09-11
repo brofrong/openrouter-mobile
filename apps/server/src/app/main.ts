@@ -3,6 +3,8 @@ import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { ChatLive } from "../features/chat/ChatLive";
+import { OpenRouterChatLive } from "../features/chat/OpenRouterChat";
+import { DurableStreamLive } from "../features/durable-stream/DurableStreamLive";
 import { HealthLive } from "../features/health/HealthLive";
 import { AuthHttpLive } from "../shared/AuthHttp";
 import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
@@ -23,10 +25,15 @@ const RpcWs = RpcServer.layerHttp({
   protocol: "websocket",
 });
 
+const ChatInfra = Layer.mergeAll(DurableStreamLive, OpenRouterChatLive).pipe(
+  Layer.provideMerge(DbLive),
+);
+
 const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
   Layer.provide(HealthLive),
   Layer.provide(ChatLive),
   Layer.provide(AuthMiddlewareLive),
+  Layer.provide(ChatInfra),
   Layer.provide(RpcSerialization.layerNdjson),
 );
 
