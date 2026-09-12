@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../shared/ui/PlaceholderScreen";
+import { AudioScreen } from "../../features/audio/AudioScreen";
 
-export default function AudioScreen() {
-  return (
-    <PlaceholderScreen
-      description="Audio generation through OpenRouter. This tab is a static placeholder until jobs are connected."
-      title="Audio"
-    />
-  );
+export default function AudioRoute() {
+  return <AudioScreen />;
 }

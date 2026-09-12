@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router/js-tabs";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
+import { SignOutButton } from "../../shared/ui/SignOutButton";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -25,7 +26,12 @@ const tabIcon =
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ headerTitleAlign: "center" }}>
+    <Tabs
+      screenOptions={{
+        headerTitleAlign: "center",
+        headerRight: () => <SignOutButton />,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{

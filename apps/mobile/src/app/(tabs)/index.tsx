@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from "../../shared/ui/PlaceholderScreen";
+import { ChatScreen } from "../../features/chat/ChatScreen";
 
-export default function ChatScreen() {
-  return (
-    <PlaceholderScreen
-      description="Chat with OpenRouter models. Streaming and history will land in a later task."
-      title="Chat"
-    />
-  );
+export default function ChatRoute() {
+  return <ChatScreen />;
 }

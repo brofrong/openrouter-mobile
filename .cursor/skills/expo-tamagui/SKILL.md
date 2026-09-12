@@ -92,6 +92,25 @@ Start: `bun run --filter @openrouter-mobile/mobile dev` or `bun run --filter @op
 - If those subpaths fail, check `resolver.unstable_enablePackageExports` is true (default). Do not disable package exports to “fix” Tamagui.
 - `@tamagui/config/v5` and `@tamagui/config/v5-rn` are conditional exports (`react-native` / `browser` / `import` / `require`). Metro must keep those conditions.
 
-## Later install tasks
+## Client wiring (T11)
 
-T11 must patch this skill with FetchHttpClient (`expo/fetch`) + websocket + `authClient.getCookie()` wiring from the installed packages.
+Env (defaults `localhost:3000`): `EXPO_PUBLIC_AUTH_URL`, `EXPO_PUBLIC_RPC_HTTP_URL`, `EXPO_PUBLIC_RPC_WS_URL`.
+
+```ts
+import { fetch as expoFetch } from "expo/fetch";
+import { FetchHttpClient } from "effect/unstable/http";
+import { Socket } from "effect/unstable/socket";
+
+FetchHttpClient.layer
+Layer.succeed(FetchHttpClient.Fetch, expoFetch)
+Layer.succeed(FetchHttpClient.RequestInit, {
+  credentials: Platform.OS === "web" ? "include" : "omit",
+})
+
+Socket.fromWebSocket(acquire) // sets binaryType = "arraybuffer"
+```
+
+- HTTP RPC: POST `EXPO_PUBLIC_RPC_HTTP_URL` (`/rpc`), NDJSON, `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
+- Streams: WebSocket `EXPO_PUBLIC_RPC_WS_URL` (`/rpc/ws`). Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
+- `expo-secure-store` is native-only. Web auth storage is `localStorage`; the Expo plugin skips SecureStore on web and uses `credentials: "include"` for `/api/auth/*`.
+- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime}.ts`

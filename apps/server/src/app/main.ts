@@ -33,13 +33,25 @@ const FeatureInfra = Layer.mergeAll(
   OpenRouterMediaLive,
 ).pipe(Layer.provideMerge(DbLive));
 
-const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
-  Layer.provide(HealthLive),
-  Layer.provide(ChatLive),
-  Layer.provide(GenerationLive),
-  Layer.provide(AuthMiddlewareLive),
-  Layer.provide(FeatureInfra),
-  Layer.provide(RpcSerialization.layerNdjson),
+const RpcRoutes = HttpRouter.cors({
+  allowedOrigins: [
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+    "http://localhost:8082",
+    "http://localhost:19006",
+  ],
+  credentials: true,
+}).pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
+      Layer.provide(HealthLive),
+      Layer.provide(ChatLive),
+      Layer.provide(GenerationLive),
+      Layer.provide(AuthMiddlewareLive),
+      Layer.provide(FeatureInfra),
+      Layer.provide(RpcSerialization.layerNdjson),
+    ),
+  ),
 );
 
 const HttpLive = Layer.unwrap(

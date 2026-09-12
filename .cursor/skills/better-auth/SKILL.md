@@ -86,11 +86,30 @@ Server session: `auth.api.getSession({ headers })` with a Web `Headers` built fr
 
 ## Expo client (T11)
 
-- `createAuthClient` from `better-auth/react`
-- `expoClient` from `@better-auth/expo/client`
-- `expo-secure-store`
-- RPC: `headers: { Cookie: await authClient.getCookie() }`, `credentials: "omit"` on native
+`apps/mobile/src/shared/auth-client.ts`:
+
+```ts
+import { createAuthClient } from "better-auth/react"
+import { expoClient } from "@better-auth/expo/client"
+import * as SecureStore from "expo-secure-store"
+
+export const authClient = createAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_AUTH_URL,
+  plugins: [
+    expoClient({
+      scheme: "openrouter-mobile",
+      storagePrefix: "openrouter-mobile",
+      storage: Platform.OS === "web" ? webStorage : SecureStore,
+    }),
+  ],
+})
+```
+
+- `expo-secure-store@57` has no web implementation. Pass a `localStorage` adapter (`getItem` / `setItem` / `getItemAsync` / `setItemAsync`) on web.
+- On web the Expo plugin does **not** persist `Set-Cookie` into storage; it leaves `credentials` alone so the browser cookie jar is used. RPC HTTP therefore uses `credentials: "include"` on web and `omit` on native.
+- RPC: `headers: { Cookie: await authClient.getCookie() }` via `HttpClientRequest.setHeader(..., "cookie", cookie)`, native fetch `credentials: "omit"`.
 - Cookie header format from sign-in `Set-Cookie`: `Cookie: better-auth.session_token=<token>.<url-encoded-hmac>`
+- Root layout: no session → `/sign-in`; signed-in users see tabs. Sign-out is the tabs header button.
 
 Official Better Auth skill pack: `.cursor/skills/better-auth-official/`. Prefer this repo skill for stack and MVP scope: no email verification, adapter path `@better-auth/drizzle-adapter/relations-v2` (not `better-auth/adapters/drizzle`), and no Next.js/Prisma handlers. Use the official pack for library API details.
 

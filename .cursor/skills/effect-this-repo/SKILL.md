@@ -117,4 +117,13 @@ Config.all({ databaseUrl, port })
 
 Better Auth (T7.5, `better-auth@1.7.4`): `betterAuth` from `"better-auth"`, `drizzleAdapter` from `"@better-auth/drizzle-adapter/relations-v2"`, `expo` from `"@better-auth/expo"`. RPC middleware is `RpcMiddleware.Service` from `"effect/unstable/rpc"`. Session: `auth.api.getSession({ headers })`. See `.cursor/skills/better-auth/SKILL.md`.
 
-T11 must still patch this file with mobile `ManagedRuntime` imports.
+## Mobile runtime (T11)
+
+```ts
+import { Layer, ManagedRuntime } from "effect"
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc"
+
+export const mobileRuntime = ManagedRuntime.make(MobileLive)
+```
+
+`apps/mobile/src/shared/runtime.ts` is the only mobile `ManagedRuntime`. Unary RPC uses `RpcHttp` (HTTP NDJSON); `ChatSubscribe` / `JobSubscribe` use `RpcWs`. Do not call `Effect.runPromise` from React render — `mobileRuntime.runPromise` / `runCallback` in effects and handlers only.

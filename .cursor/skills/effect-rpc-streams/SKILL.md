@@ -169,6 +169,27 @@ Consumer (`subscribe`): `Stream.unwrap` → `PubSub.subscribe` (wait until subsc
 - In-memory PubSub is a live tail only — chunks still persist if nobody is connected
 - `ChatSubscribe` / `JobSubscribe` map this stream to `TokenChunk` / `JobEvent`
 
-## Later install tasks
+## Client (`apps/mobile/src/shared/rpc.ts`)
 
-T11 must still patch this skill with `RpcClient.make` / `RpcClient.layerProtocolHttp` client usage.
+```ts
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc"
+
+RpcClient.make(AppRpcs)
+RpcClient.layerProtocolHttp({
+  url: process.env.EXPO_PUBLIC_RPC_HTTP_URL,
+  transformClient: (client) =>
+    HttpClient.mapRequestEffect(client, (request) =>
+      Effect.promise(() => authClient.getCookie()).pipe(
+        Effect.map((cookie) =>
+          cookie.length > 0
+            ? HttpClientRequest.setHeader(request, "cookie", cookie)
+            : request
+        )
+      )
+    ),
+})
+RpcClient.layerProtocolSocket()
+RpcSerialization.layerNdjson
+```
+
+Queries/mutations (`ChatList`, `ChatSend`, `ImageGenerate`, …) go over HTTP POST `/rpc`. Streams (`ChatSubscribe`, `JobSubscribe`) go over WebSocket `/rpc/ws`. Two client services (`RpcHttp`, `RpcWs`) share one `ManagedRuntime`; each protocol layer is provided privately so `Protocol` does not clash.
