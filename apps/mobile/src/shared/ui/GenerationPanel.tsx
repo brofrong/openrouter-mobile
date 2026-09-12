@@ -2,10 +2,11 @@ import type { GenerationJob, JobEvent } from "@openrouter-mobile/domain";
 import { Effect } from "effect";
 import { useCallback, useState } from "react";
 import { Button, H2, Input, Paragraph, Text, YStack } from "tamagui";
-import { formatRpcError } from "../../shared/errors";
-import { RpcHttp, RpcWs } from "../../shared/rpc";
-import { mobileRuntime } from "../../shared/runtime";
-import { useRpcStream } from "../../shared/use-rpc-stream";
+import { withAfterSeq } from "../afterSeq";
+import { formatRpcError } from "../errors";
+import { RpcHttp, RpcWs } from "../rpc";
+import { mobileRuntime } from "../runtime";
+import { useRpcStream } from "../use-rpc-stream";
 
 type GenerationKind = "image" | "video" | "speech" | "audio";
 
@@ -71,13 +72,13 @@ export function GenerationPanel({
   };
 
   const subscribeMake = useCallback(
-    () =>
+    (afterSeq?: number) =>
       Effect.gen(function* () {
         if (job === undefined) {
           return yield* Effect.die("Job stream started without a job");
         }
         const rpc = yield* RpcWs;
-        return rpc.JobSubscribe({ jobId: job.id });
+        return rpc.JobSubscribe(withAfterSeq({ jobId: job.id }, afterSeq));
       }),
     [job],
   );

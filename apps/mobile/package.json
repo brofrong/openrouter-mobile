@@ -16,6 +16,7 @@
     "@expo/vector-icons": "^15.0.2",
     "@openrouter-mobile/domain": "workspace:*",
     "@openrouter-mobile/rpc": "workspace:*",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@tamagui/config": "^2.7.7",
     "better-auth": "1.7.4",
     "effect": "4.0.0-rc.113",

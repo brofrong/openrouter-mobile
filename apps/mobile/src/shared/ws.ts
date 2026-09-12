@@ -1,4 +1,5 @@
 import { Effect, Layer } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { Platform } from "react-native";
 import { authClient } from "./auth-client";
@@ -56,3 +57,13 @@ export const RpcSocketLive = Layer.effect(
     ),
   ),
 );
+
+/**
+ * `retryTransientErrors` exists on `layerProtocolSocket` in effect@4.0.0-rc.113
+ * (`RpcClient.ts`). It retries `SocketOpenError` (connect fail / ping timeout)
+ * without failing in-flight RPCs. Socket close still ends the current
+ * ChatSubscribe / JobSubscribe; the stream hook resubscribes with afterSeq.
+ */
+export const RpcWsProtocolLive = RpcClient.layerProtocolSocket({
+  retryTransientErrors: true,
+}).pipe(Layer.provide(RpcSocketLive));

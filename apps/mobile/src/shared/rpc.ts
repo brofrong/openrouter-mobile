@@ -9,7 +9,7 @@ import {
 import { authClient } from "./auth-client";
 import { rpcHttpUrl } from "./env";
 import { ExpoHttpLive } from "./http";
-import { RpcSocketLive } from "./ws";
+import { RpcWsProtocolLive } from "./ws";
 
 export type AppRpcClient = RpcClient.FromGroup<
   typeof AppRpcs,
@@ -39,10 +39,6 @@ const RpcHttpProtocolLive = RpcClient.layerProtocolHttp({
   url: rpcHttpUrl,
   transformClient: withAuthCookie,
 });
-
-const RpcWsProtocolLive = RpcClient.layerProtocolSocket().pipe(
-  Layer.provide(RpcSocketLive),
-);
 
 export const RpcHttpLive = Layer.effect(RpcHttp, RpcClient.make(AppRpcs)).pipe(
   Layer.provide(RpcHttpProtocolLive),

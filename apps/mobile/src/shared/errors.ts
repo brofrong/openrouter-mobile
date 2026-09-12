@@ -3,6 +3,27 @@ import { AppError } from "@openrouter-mobile/domain";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const appErrorCode = (error: unknown): string | undefined => {
+  if (error instanceof AppError) {
+    return error.code;
+  }
+  if (isRecord(error) && typeof error.code === "string") {
+    return error.code;
+  }
+  return undefined;
+};
+
+/** Typed app failures must not trigger reconnect (STREAM_GONE especially). */
+export const isFatalStreamError = (error: unknown): boolean => {
+  const code = appErrorCode(error);
+  return (
+    code === "STREAM_GONE" ||
+    code === "OPENROUTER" ||
+    code === "UNAUTHORIZED" ||
+    code === "NOT_FOUND"
+  );
+};
+
 export const formatRpcError = (error: unknown): string => {
   if (error instanceof AppError) {
     return error.code === "OPENROUTER"

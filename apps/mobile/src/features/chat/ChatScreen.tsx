@@ -10,6 +10,7 @@ import {
   XStack,
   YStack,
 } from "tamagui";
+import { withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
@@ -163,10 +164,12 @@ export function ChatScreen() {
   };
 
   const subscribeMake = useCallback(
-    () =>
+    (afterSeq?: number) =>
       Effect.gen(function* () {
         const rpc = yield* RpcWs;
-        return rpc.ChatSubscribe({ chatId: selectedId as ChatId });
+        return rpc.ChatSubscribe(
+          withAfterSeq({ chatId: selectedId as ChatId }, afterSeq),
+        );
       }),
     [selectedId],
   );
