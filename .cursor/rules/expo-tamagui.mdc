@@ -12,10 +12,9 @@ alwaysApply: false
 - Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
 - Effect HTTP: `expo/fetch` for FetchHttpClient
 - WebSocket: `binaryType = "arraybuffer"`
-- Upload files via HTTP, then pass the id over RPC
 
 ## Do not
-- Nested `File` in RPC payloads
+- Nested `File` in RPC payloads (no HTTP upload route; media jobs are stubs; `AudioTranscribe` takes a string `assetId`)
 - Import `apps/server` from the mobile app
 
 Read `.cursor/skills/expo-tamagui/SKILL.md`.
