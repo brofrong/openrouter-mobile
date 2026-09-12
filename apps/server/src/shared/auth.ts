@@ -8,6 +8,7 @@ import {
   verification,
 } from "@openrouter-mobile/db";
 import { betterAuth } from "better-auth";
+import { trustedOrigins } from "./origins";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -16,15 +17,6 @@ const databaseUrl =
 const db = createAuthDb(databaseUrl);
 
 const authSchema = { user, session, account, verification };
-
-const trustedOrigins = [
-  "openrouter-mobile://",
-  "http://localhost:8081",
-  "http://localhost:3000",
-  ...(process.env.NODE_ENV === "production"
-    ? []
-    : ["exp://", "exp://**", "exp://192.168.*.*:*/**"]),
-];
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {

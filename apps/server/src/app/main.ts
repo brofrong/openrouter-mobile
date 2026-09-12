@@ -12,6 +12,7 @@ import { AuthHttpLive } from "../shared/AuthHttp";
 import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
+import { corsAllowedOrigins } from "../shared/origins";
 import { BunRuntime } from "../shared/runtime";
 import { ServerRpcs } from "./ServerRpcs";
 
@@ -34,12 +35,7 @@ const FeatureInfra = Layer.mergeAll(
 ).pipe(Layer.provideMerge(DbLive));
 
 const RpcRoutes = HttpRouter.cors({
-  allowedOrigins: [
-    "http://localhost:8081",
-    "http://127.0.0.1:8081",
-    "http://localhost:8082",
-    "http://localhost:19006",
-  ],
+  allowedOrigins: corsAllowedOrigins,
   credentials: true,
 }).pipe(
   Layer.provideMerge(

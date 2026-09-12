@@ -14,6 +14,7 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { expo } from "@better-auth/expo"
 import { betterAuth } from "better-auth"
 import { account, createAuthDb, session, user, verification } from "@openrouter-mobile/db"
+import { trustedOrigins } from "./origins"
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -22,17 +23,13 @@ export const auth = betterAuth({
   }),
   emailAndPassword: { enabled: true }, // do NOT set requireEmailVerification
   plugins: [expo()],
-  trustedOrigins: [
-    "openrouter-mobile://",
-    "http://localhost:8081",
-    "http://localhost:3000",
-    ...(process.env.NODE_ENV === "production" ? [] : ["exp://", "exp://**"]),
-  ],
+  trustedOrigins, // apps/server/src/shared/origins.ts — same Expo web ports as RPC CORS
 })
 
 export type Session = typeof auth.$Infer.Session
 ```
 
+- `trustedOrigins` and RPC CORS share `apps/server/src/shared/origins.ts` (Expo web 8081/8082/19006 + `openrouter-mobile://` / `exp://`).
 - Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2` (NOT `better-auth/adapters/drizzle`, NOT `@better-auth/drizzle-adapter` default/v1).
 - Server plugin: `expo()` from `@better-auth/expo`.
 - Classic Drizzle client only: `createAuthDb` in `packages/db/src/client.ts` uses `drizzle-orm/postgres-js` + `postgres`. Effect `PgDrizzle` is not accepted by the adapter. `drizzle-orm/bun-sql` fails under `bun x auth generate` (CLI loads config with Node/jiti; `bun` is not resolvable).

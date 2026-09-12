@@ -15,15 +15,46 @@ import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
 import { useRpcStream } from "../../shared/use-rpc-stream";
 
+type ThreadItem = {
+  readonly id: string;
+  readonly role: "user" | "assistant" | "system";
+  readonly content: string;
+};
+
+const toThreadItem = (message: Message): ThreadItem => ({
+  id: message.id,
+  role: message.role,
+  content: message.content,
+});
+
+const commitDraft = (
+  current: ReadonlyArray<ThreadItem>,
+  draft: string,
+): ReadonlyArray<ThreadItem> => {
+  if (draft.length === 0) {
+    return current;
+  }
+  return [
+    ...current,
+    {
+      id: `local-assistant-${current.length}-${draft.length}`,
+      role: "assistant",
+      content: draft,
+    },
+  ];
+};
+
 export function ChatScreen() {
   const [chats, setChats] = useState<ReadonlyArray<Chat>>([]);
   const [selectedId, setSelectedId] = useState<ChatId | undefined>();
-  const [messages, setMessages] = useState<ReadonlyArray<Message>>([]);
+  const [messages, setMessages] = useState<ReadonlyArray<ThreadItem>>([]);
   const [draft, setDraft] = useState("");
   const [composer, setComposer] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const acceptTokensRef = useRef(false);
+  const draftRef = useRef("");
+  draftRef.current = draft;
 
   const loadChats = useCallback(() => {
     void mobileRuntime.runPromise(
@@ -63,7 +94,7 @@ export function ChatScreen() {
             setError(formatRpcError(failure));
           },
           onSuccess: (list) => {
-            setMessages(list);
+            setMessages(list.map(toThreadItem));
           },
         }),
       ),
@@ -107,6 +138,8 @@ export function ChatScreen() {
     }
     setComposer("");
     setBusy(true);
+    setMessages((current) => commitDraft(current, draftRef.current));
+    setDraft("");
     acceptTokensRef.current = true;
     void mobileRuntime.runPromise(
       Effect.gen(function* () {
@@ -120,8 +153,7 @@ export function ChatScreen() {
             acceptTokensRef.current = false;
           },
           onSuccess: (message) => {
-            setMessages((current) => [...current, message]);
-            setDraft("");
+            setMessages((current) => [...current, toThreadItem(message)]);
             setError(undefined);
             setBusy(false);
           },
