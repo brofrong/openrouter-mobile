@@ -48,6 +48,14 @@ const FailLive = Layer.mergeAll(DurableStreamLive, OpenRouterFailLive).pipe(
   Layer.provideMerge(DbLive),
 );
 
+const OpenRouterDieLive = Layer.succeed(OpenRouterMedia, {
+  generate: () => Effect.die(new Error("media fiber died")),
+});
+
+const DieLive = Layer.mergeAll(DurableStreamLive, OpenRouterDieLive).pipe(
+  Layer.provideMerge(DbLive),
+);
+
 const makeSession = (userId: string, email: string): Session =>
   ({
     session: {
@@ -88,6 +96,15 @@ const runFail = <A, E>(
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(FailLive)));
+
+const runDie = <A, E>(
+  effect: Effect.Effect<
+    A,
+    E,
+    AppDb | DurableStream | OpenRouterMedia | Scope.Scope
+  >,
+): Promise<A> =>
+  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(DieLive)));
 
 const insertUser = (label: string) =>
   Effect.gen(function* () {
@@ -264,7 +281,8 @@ test("JobSubscribe receives failed when generation errors", async () => {
         where: { streamId: job.id },
         orderBy: { seq: "asc" },
       });
-      return { events, ledger };
+      const stored = yield* asUser(session, getJob(job.id));
+      return { events, ledger, stored };
     }),
   );
 
@@ -274,6 +292,8 @@ test("JobSubscribe receives failed when generation errors", async () => {
     "failed",
   ]);
   expect(result.events[2]?.error).toBe("upstream failed");
+  expect(result.stored.status).toBe("failed");
+  expect(result.stored.error).toBe("upstream failed");
   expect(
     result.ledger.some(
       (event) =>
@@ -284,4 +304,28 @@ test("JobSubscribe receives failed when generation errors", async () => {
         event.payload.status === "failed",
     ),
   ).toBe(true);
+});
+
+test("JobSubscribe receives failed when media.generate dies", async () => {
+  const result = await runDie(
+    Effect.gen(function* () {
+      const session = yield* insertUser("openrouter-die");
+      const job = yield* asUser(session, generateImage({ prompt: "boom" }));
+      const events = yield* asUser(
+        session,
+        subscribeJob(job.id, 0).pipe(Stream.take(3), Stream.runCollect),
+      );
+      const stored = yield* asUser(session, getJob(job.id));
+      return { events, stored };
+    }),
+  );
+
+  expect(result.events.map((event) => event.status)).toEqual([
+    "queued",
+    "running",
+    "failed",
+  ]);
+  expect(result.events[2]?.error).toBe("media fiber died");
+  expect(result.stored.status).toBe("failed");
+  expect(result.stored.error).toBe("media fiber died");
 });

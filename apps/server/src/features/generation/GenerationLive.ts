@@ -7,7 +7,7 @@ import {
 } from "@openrouter-mobile/domain";
 import { JobRpcs, MediaRpcs } from "@openrouter-mobile/rpc";
 import { eq } from "drizzle-orm";
-import { DateTime, Effect, Schema, Stream } from "effect";
+import { Cause, DateTime, Effect, Schema, Stream } from "effect";
 import { AuthMiddleware, CurrentSession } from "../../shared/AuthMiddleware";
 import { AppDb } from "../../shared/db";
 import {
@@ -95,6 +95,20 @@ const appendJobEvent = (
     .append(jobId, "job", payload)
     .pipe(Effect.mapError(unexpected), Effect.asVoid);
 
+const errorFromCause = (cause: Cause.Cause<unknown>): AppError => {
+  const squashed = Cause.squash(cause);
+  if (squashed instanceof AppError) {
+    return squashed;
+  }
+  if (squashed instanceof Error) {
+    return unexpected(squashed);
+  }
+  const pretty = Cause.pretty(cause);
+  return unexpected(
+    new Error(pretty.length > 0 ? pretty : "Generation fiber failed"),
+  );
+};
+
 const persistFailure = (options: {
   readonly jobId: string;
   readonly error: AppError;
@@ -102,14 +116,24 @@ const persistFailure = (options: {
   readonly durable: DurableStreamService;
 }) =>
   Effect.gen(function* () {
-    yield* options.db
-      .update(generationJobs)
-      .set({
-        status: "failed",
-        error: options.error.message,
+    const row = yield* options.db.query.generationJobs
+      .findFirst({
+        where: { id: options.jobId },
       })
-      .where(eq(generationJobs.id, options.jobId))
-      .pipe(Effect.mapError(unexpected), Effect.asVoid);
+      .pipe(Effect.mapError(unexpected));
+    if (row === undefined || row.status === "completed") {
+      return;
+    }
+    if (row.status !== "failed") {
+      yield* options.db
+        .update(generationJobs)
+        .set({
+          status: "failed",
+          error: options.error.message,
+        })
+        .where(eq(generationJobs.id, options.jobId))
+        .pipe(Effect.mapError(unexpected), Effect.asVoid);
+    }
     yield* appendJobEvent(options.durable, options.jobId, {
       status: "failed",
       error: options.error.message,
@@ -123,8 +147,16 @@ const runGeneration = (options: {
   readonly db: Effect.Success<typeof AppDb>;
   readonly durable: DurableStreamService;
   readonly media: OpenRouterMediaService;
-}) =>
-  Effect.gen(function* () {
+}) => {
+  const fail = (error: AppError) =>
+    persistFailure({
+      jobId: options.jobId,
+      error,
+      db: options.db,
+      durable: options.durable,
+    });
+
+  return Effect.gen(function* () {
     yield* options.db
       .update(generationJobs)
       .set({ status: "running" })
@@ -140,7 +172,15 @@ const runGeneration = (options: {
         prompt: options.prompt,
         jobId: options.jobId,
       })
-      .pipe(Effect.mapError(toAppError));
+      .pipe(
+        Effect.mapError(toAppError),
+        Effect.catchTag("AppError", (error) =>
+          fail(error).pipe(Effect.as(undefined)),
+        ),
+      );
+    if (result === undefined) {
+      return;
+    }
 
     yield* options.db
       .update(generationJobs)
@@ -155,15 +195,11 @@ const runGeneration = (options: {
       url: result.url,
     });
   }).pipe(
-    Effect.catchTag("AppError", (error) =>
-      persistFailure({
-        jobId: options.jobId,
-        error,
-        db: options.db,
-        durable: options.durable,
-      }),
+    Effect.catchCause((cause) =>
+      fail(errorFromCause(cause)).pipe(Effect.catchCause(() => Effect.void)),
     ),
   );
+};
 
 const startJob = (kind: MediaKind, prompt: string) =>
   Effect.gen(function* () {
