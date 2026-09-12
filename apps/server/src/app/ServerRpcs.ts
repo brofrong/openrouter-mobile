@@ -1,6 +1,11 @@
-import { ChatRpcs, HealthRpcs } from "@openrouter-mobile/rpc";
+import {
+  ChatRpcs,
+  HealthRpcs,
+  JobRpcs,
+  MediaRpcs,
+} from "@openrouter-mobile/rpc";
 import { AuthMiddleware } from "../shared/AuthMiddleware";
 
-export class ServerRpcs extends ChatRpcs.middleware(AuthMiddleware).merge(
-  HealthRpcs,
-) {}
+export class ServerRpcs extends ChatRpcs.merge(JobRpcs, MediaRpcs)
+  .middleware(AuthMiddleware)
+  .merge(HealthRpcs) {}

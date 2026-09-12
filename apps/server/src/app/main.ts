@@ -5,6 +5,8 @@ import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import { ChatLive } from "../features/chat/ChatLive";
 import { OpenRouterChatLive } from "../features/chat/OpenRouterChat";
 import { DurableStreamLive } from "../features/durable-stream/DurableStreamLive";
+import { GenerationLive } from "../features/generation/GenerationLive";
+import { OpenRouterMediaLive } from "../features/generation/OpenRouterMedia";
 import { HealthLive } from "../features/health/HealthLive";
 import { AuthHttpLive } from "../shared/AuthHttp";
 import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
@@ -25,15 +27,18 @@ const RpcWs = RpcServer.layerHttp({
   protocol: "websocket",
 });
 
-const ChatInfra = Layer.mergeAll(DurableStreamLive, OpenRouterChatLive).pipe(
-  Layer.provideMerge(DbLive),
-);
+const FeatureInfra = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterChatLive,
+  OpenRouterMediaLive,
+).pipe(Layer.provideMerge(DbLive));
 
 const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
   Layer.provide(HealthLive),
   Layer.provide(ChatLive),
+  Layer.provide(GenerationLive),
   Layer.provide(AuthMiddlewareLive),
-  Layer.provide(ChatInfra),
+  Layer.provide(FeatureInfra),
   Layer.provide(RpcSerialization.layerNdjson),
 );
 
