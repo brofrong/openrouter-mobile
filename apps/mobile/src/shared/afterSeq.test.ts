@@ -51,6 +51,16 @@ test("setAfterSeq persists the last seq and omits it until the first chunk", asy
   expect(getAfterSeq("chat-1")).toBe(3);
 });
 
+test("setAfterSeq keeps memory even if storage write rejects", () => {
+  resetAfterSeq();
+  configureAfterSeqStorage({
+    getItem: () => Promise.resolve(null),
+    setItem: () => Promise.reject(new Error("quota")),
+  });
+  setAfterSeq("chat-1", 1);
+  expect(getAfterSeq("chat-1")).toBe(1);
+});
+
 test("acceptSeq skips duplicate seqs", () => {
   const seen = new Set<number>();
   expect(acceptSeq(seen, 1)).toBe(true);

@@ -14,10 +14,20 @@ import direction `app → features → entities → shared`; features never impo
 - `entities` — reusable domain widgets/helpers scoped to an entity
 - `shared` — runtime, rpc client, config, ui primitives
 
+## Apps
+
+- `apps/server/src/app/main.ts` — `BunRuntime.runMain(Layer.launch(Main))`
+- `apps/server/src/app/ServerRpcs.ts` — `AppRpcs` + `AuthMiddleware` (Health public)
+- `apps/server/src/features/{chat,generation,durable-stream,health}`
+- `apps/server/src/shared/{runtime,auth,db,config}.ts`
+- `apps/mobile/src/app/` — Expo Router (`(tabs)`, `sign-in`, `sign-up`)
+- `apps/mobile/src/features/{chat,images,video,speech,audio}`
+- `apps/mobile/src/shared/{runtime,rpc,auth-client,afterSeq}.ts`
+
 ## Packages
 
 - `packages/domain` — `Schema.Class` DTOs only
-- `packages/rpc` — `RpcGroup` contracts, no handlers
+- `packages/rpc` — `RpcGroup` contracts (`packages/rpc/src/AppRpcs.ts`), no handlers
 - `packages/db` — tables + `defineRelations`
 
 Do not import `apps/server` from `apps/mobile`.

@@ -8,7 +8,7 @@ description: Durable Effect RPC streams — persist-then-publish, subscribe-then
 Producer: persist → publish (never publish first).
 Consumer: subscribe live (wait until subscribed) → replay seq > afterSeq → concat live filtered seq > max(replayed).
 Stream procedure payloads have `afterSeq: Schema.optionalKey(Schema.Number)` (`ChatSubscribe`, `JobSubscribe`). `ChatMessages` may also take `afterSeq` as an optional history cursor. `ChatSend` is unary (starts generation; do not reconnect through it).
-Client stores last `seq` from the stream and sends it on reconnect.
+Client stores last `seq` from the stream and sends it on reconnect (`apps/mobile/src/shared/afterSeq.ts`).
 Do not use Socket.IO. Transports are `RpcServer.layerProtocolHttp` and `RpcServer.layerProtocolWebsocket` only.
 
 ## Installed APIs (`effect@4.0.0-rc.113`)
@@ -20,10 +20,18 @@ import { Schema } from "effect"
 import { Rpc, RpcGroup, RpcServer, RpcSerialization } from "effect/unstable/rpc"
 ```
 
-Package: `@openrouter-mobile/rpc`. Groups only — no handlers. Merge:
+Package: `@openrouter-mobile/rpc`. Groups only — no handlers. Live merge in `packages/rpc/src/AppRpcs.ts`:
 
 ```ts
 export class AppRpcs extends ChatRpcs.merge(JobRpcs, MediaRpcs, HealthRpcs) {}
+```
+
+Server applies auth in `apps/server/src/app/ServerRpcs.ts` (Health stays public):
+
+```ts
+export class ServerRpcs extends ChatRpcs.merge(JobRpcs, MediaRpcs)
+  .middleware(AuthMiddleware)
+  .merge(HealthRpcs) {}
 ```
 
 ### `Rpc.make` (from `effect/src/unstable/rpc/Rpc.ts`)
@@ -75,7 +83,7 @@ merge<const Groups extends ReadonlyArray<Any>>(
 ): RpcGroup<R | Rpcs<Groups[number]>>
 ```
 
-Handlers later: `Group.toLayer({ ... })` / `toLayerHandler`.
+Handlers: `Group.toLayer({ ... })` / `toLayerHandler`. Live layers: `HealthLive`, `ChatLive`, `GenerationLive`.
 
 ### Protocol Layers (copied from `effect@4.0.0-rc.113` `RpcServer.ts`)
 
@@ -110,31 +118,35 @@ export const layerProtocolWebsocket = (options: {
 }): Layer.Layer<Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 ```
 
-Server wiring in `apps/server/src/app/main.ts`:
+Server wiring in `apps/server/src/app/main.ts` (port from `AppConfig`, default 3000):
 
 ```ts
 const RpcHttp = RpcServer.layerHttp({
-  group: HealthRpcs,
+  group: ServerRpcs,
   path: "/rpc",
   protocol: "http",
 })
 const RpcWs = RpcServer.layerHttp({
-  group: HealthRpcs,
+  group: ServerRpcs,
   path: "/rpc/ws",
   protocol: "websocket",
 })
-const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs).pipe(
+const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
   Layer.provide(HealthLive),
+  Layer.provide(ChatLive),
+  Layer.provide(GenerationLive),
+  Layer.provide(AuthMiddlewareLive),
+  Layer.provide(FeatureInfra),
   Layer.provide(RpcSerialization.layerNdjson),
 )
 const HttpLive = HttpRouter.serve(RpcRoutes).pipe(
-  Layer.provide(BunHttpServer.layer({ hostname: "0.0.0.0", port: 3000 })),
+  Layer.provide(BunHttpServer.layer({ hostname: "0.0.0.0", port })),
 )
 ```
 
-HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Handlers: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })`.
+HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Health handler: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })` in `apps/server/src/features/health/HealthLive.ts`. Runtime entry: `apps/server/src/shared/runtime.ts` re-exports `BunRuntime`.
 
-## Durable stream kernel (T8)
+## Durable stream kernel
 
 Copy these signatures from `apps/server/src/features/durable-stream/DurableStream.ts`. Do not reinvent the algorithm.
 
@@ -192,4 +204,4 @@ RpcClient.layerProtocolSocket()
 RpcSerialization.layerNdjson
 ```
 
-Queries/mutations (`ChatList`, `ChatSend`, `ImageGenerate`, …) go over HTTP POST `/rpc`. Streams (`ChatSubscribe`, `JobSubscribe`) go over WebSocket `/rpc/ws`. Two client services (`RpcHttp`, `RpcWs`) share one `ManagedRuntime`; each protocol layer is provided privately so `Protocol` does not clash.
+Queries/mutations (`ChatList`, `ChatSend`, `ImageGenerate`, …) go over HTTP POST `/rpc`. Streams (`ChatSubscribe`, `JobSubscribe`) go over WebSocket `/rpc/ws`. Two client services (`RpcHttp`, `RpcWs`) share one `ManagedRuntime` in `apps/mobile/src/shared/runtime.ts`; each protocol layer is provided privately so `Protocol` does not clash.

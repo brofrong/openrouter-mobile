@@ -11,8 +11,8 @@ Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@
 - Expo SDK 57, Expo Router tabs under `apps/mobile/src/app/(tabs)/`
 - Scheme: `openrouter-mobile` (Better Auth deep links)
 - Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
-- Effect HTTP: `expo/fetch` for FetchHttpClient (wire in T11)
-- WebSocket: `binaryType = "arraybuffer"`
+- Effect HTTP: `expo/fetch` for FetchHttpClient (`apps/mobile/src/shared/http.ts`)
+- WebSocket: `binaryType = "arraybuffer"` (`apps/mobile/src/shared/ws.ts`)
 - Upload files via HTTP, then pass the returned id over RPC
 
 ## Do not
@@ -65,13 +65,15 @@ UI primitives from `tamagui`: `YStack`, `XStack`, `H1`/`H2`, `Paragraph`, `Text`
 
 | File | Role |
 | --- | --- |
-| `apps/mobile/src/app/_layout.tsx` | `TamaguiProvider` + `ThemeProvider` + `Stack` |
-| `apps/mobile/src/app/(tabs)/_layout.tsx` | Tabs: Chat, Images, Video, Speech, Audio |
-| `apps/mobile/src/app/(tabs)/index.tsx` | Chat placeholder |
-| `apps/mobile/src/app/(tabs)/images.tsx` | Images placeholder |
-| `apps/mobile/src/app/(tabs)/video.tsx` | Video placeholder |
-| `apps/mobile/src/app/(tabs)/speech.tsx` | Speech placeholder |
-| `apps/mobile/src/app/(tabs)/audio.tsx` | Audio placeholder |
+| `apps/mobile/src/app/_layout.tsx` | `TamaguiProvider` + `ThemeProvider` + session gate (`/sign-in` when logged out) |
+| `apps/mobile/src/app/sign-in.tsx` | Email/password sign-in |
+| `apps/mobile/src/app/sign-up.tsx` | Email/password sign-up |
+| `apps/mobile/src/app/(tabs)/_layout.tsx` | Tabs: Chat, Images, Video, Speech, Audio + sign-out |
+| `apps/mobile/src/app/(tabs)/index.tsx` | Chat (`ChatScreen`) |
+| `apps/mobile/src/app/(tabs)/images.tsx` | Images (`GenerationPanel`, stub job URL) |
+| `apps/mobile/src/app/(tabs)/video.tsx` | Video (`GenerationPanel`, stub job URL) |
+| `apps/mobile/src/app/(tabs)/speech.tsx` | Speech (`GenerationPanel`, stub job URL) |
+| `apps/mobile/src/app/(tabs)/audio.tsx` | Audio (`GenerationPanel`, stub job URL) |
 | `apps/mobile/tamagui.config.ts` | `createTamagui` config |
 | `apps/mobile/app.json` | `scheme: "openrouter-mobile"` |
 
@@ -84,17 +86,17 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 
 Start: `bun run --filter @openrouter-mobile/mobile dev` or `bun run --filter @openrouter-mobile/mobile start`. Web: `bun run --filter @openrouter-mobile/mobile web`.
 
-## Metro / package-exports (Better Auth later)
+## Metro / package-exports
 
 - `apps/mobile/metro.config.js` is `getDefaultConfig(__dirname)` from `expo/metro-config`. SDK 52+ auto-detects Bun workspaces; do not set `watchFolders` / `nodeModulesPaths` unless something breaks.
 - Bun 1.4 isolated linker stores packages under `node_modules/.bun`. Expo SDK 54+ supports that.
-- Metro package exports are **on by default** in SDK 57. Keep them on: Better Auth will import `better-auth/react` and `@better-auth/expo/client`.
+- Metro package exports are **on by default** in SDK 57. Keep them on: Better Auth imports `better-auth/react` and `@better-auth/expo/client`.
 - If those subpaths fail, check `resolver.unstable_enablePackageExports` is true (default). Do not disable package exports to “fix” Tamagui.
 - `@tamagui/config/v5` and `@tamagui/config/v5-rn` are conditional exports (`react-native` / `browser` / `import` / `require`). Metro must keep those conditions.
 
-## Client wiring (T11)
+## Client wiring
 
-Env (defaults `localhost:3000`): `EXPO_PUBLIC_AUTH_URL`, `EXPO_PUBLIC_RPC_HTTP_URL`, `EXPO_PUBLIC_RPC_WS_URL`.
+Env (defaults `localhost:3000`): `EXPO_PUBLIC_AUTH_URL`, `EXPO_PUBLIC_RPC_HTTP_URL`, `EXPO_PUBLIC_RPC_WS_URL` in `apps/mobile/src/shared/env.ts`.
 
 ```ts
 import { fetch as expoFetch } from "expo/fetch";
@@ -113,4 +115,4 @@ Socket.fromWebSocket(acquire) // sets binaryType = "arraybuffer"
 - HTTP RPC: POST `EXPO_PUBLIC_RPC_HTTP_URL` (`/rpc`), NDJSON, `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
 - Streams: WebSocket `EXPO_PUBLIC_RPC_WS_URL` (`/rpc/ws`). Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
 - `expo-secure-store` is native-only. Web auth storage is `localStorage`; the Expo plugin skips SecureStore on web and uses `credentials: "include"` for `/api/auth/*`.
-- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime}.ts`
+- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq}.ts`

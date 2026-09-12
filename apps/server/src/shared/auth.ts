@@ -27,7 +27,7 @@ export const auth = betterAuth({
     enabled: true,
   },
   plugins: [expo()],
-  trustedOrigins,
+  trustedOrigins: [...trustedOrigins],
 });
 
 export type Session = typeof auth.$Infer.Session;

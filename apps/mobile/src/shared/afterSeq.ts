@@ -42,7 +42,7 @@ export const setAfterSeq = (streamId: string, seq: number): void => {
     return;
   }
   memory.set(streamId, seq);
-  void storage.setItem(keyFor(streamId), String(seq));
+  void storage.setItem(keyFor(streamId), String(seq)).catch(() => undefined);
 };
 
 export const hydrateAfterSeq = async (

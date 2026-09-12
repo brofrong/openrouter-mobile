@@ -3,7 +3,7 @@ description: Canonical stack and forbidden libraries for this monorepo
 alwaysApply: true
 ---
 
-Use Expo + Tamagui on the client, Bun + Effect v4 on the server, @effect/rpc as the only app API, Better Auth for sessions, drizzle-orm@rc with defineRelations, Biome for lint/format.
+Use Expo + Tamagui on the client, Bun + Effect v4 on the server, `effect/unstable/rpc` as the only app API, Better Auth for sessions, drizzle-orm@rc with defineRelations, Biome for lint/format.
 
 Do not add tRPC, oRPC, REST routers (except Better Auth `/api/auth/*`), Zod, Prisma, ESLint, Prettier, Redux, TanStack Query, NextAuth, or Clerk.
 

@@ -18,7 +18,7 @@ Confirmed in `node_modules/.bun/effect@4.0.0-rc.113/node_modules/effect/src/inde
 - `Effect.gen(function* () { const x = yield* Service })`
 - Errors as `Schema.TaggedError` / `Data.TaggedError`
 - Wire dependencies with `Layer.provide` / `Layer.mergeAll`
-- Server entry: `BunRuntime.runMain(Layer.launch(Main))`
+- Server entry: `BunRuntime.runMain(Layer.launch(Main))` (`apps/server/src/shared/runtime.ts` re-exports `BunRuntime`)
 - Mobile entry: one `ManagedRuntime` in `apps/mobile/src/shared/runtime.ts`
 - Streams: `Stream`, never ad-hoc callback accumulation for OpenRouter
 
@@ -91,7 +91,7 @@ Schema.Unknown
 import { Rpc, RpcGroup } from "effect/unstable/rpc"
 ```
 
-Contract package: `@openrouter-mobile/rpc` (`AppRpcs` = `ChatRpcs.merge(JobRpcs, MediaRpcs, HealthRpcs)`). See `.cursor/skills/effect-rpc-streams/SKILL.md` for `Rpc.make` / `RpcGroup.make` signatures.
+Contract package: `@openrouter-mobile/rpc` (`packages/rpc/src/AppRpcs.ts`: `AppRpcs` = `ChatRpcs.merge(JobRpcs, MediaRpcs, HealthRpcs)`). Server auth wrap is `ServerRpcs` in `apps/server/src/app/ServerRpcs.ts`. See `.cursor/skills/effect-rpc-streams/SKILL.md` for `Rpc.make` / `RpcGroup.make` signatures.
 
 ## Server runtime (copied from `@effect/platform-bun@4.0.0-rc.113`)
 
@@ -101,7 +101,9 @@ HTTP lives in `effect/unstable/http`, not `@effect/platform`. Bun adapters:
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
 ```
 
-- `BunHttpServer.layer({ hostname: "0.0.0.0", port: 3000 })` → `Layer<HttpServer | HttpPlatform | Etag.Generator | BunServices, ServeError>`
+`apps/server/src/shared/runtime.ts` re-exports `BunRuntime`. `apps/server/src/app/main.ts` launches `Main`.
+
+- `BunHttpServer.layer({ hostname: "0.0.0.0", port })` → `Layer<HttpServer | HttpPlatform | Etag.Generator | BunServices, ServeError>` (`port` from `AppConfig`, default 3000)
 - Always pass `hostname` as an IP. Omitting it makes Bun report `hostname: "localhost"`, and `NetAddress.inetAddressFromIpString` then fails (`expected exactly four decimal octets`).
 - `BunRuntime.runMain(Layer.launch(Main))`
 
@@ -115,9 +117,9 @@ Config.Port("PORT").pipe(Config.withDefault(3000))
 Config.all({ databaseUrl, port })
 ```
 
-Better Auth (T7.5, `better-auth@1.7.4`): `betterAuth` from `"better-auth"`, `drizzleAdapter` from `"@better-auth/drizzle-adapter/relations-v2"`, `expo` from `"@better-auth/expo"`. RPC middleware is `RpcMiddleware.Service` from `"effect/unstable/rpc"`. Session: `auth.api.getSession({ headers })`. See `.cursor/skills/better-auth/SKILL.md`.
+Better Auth (`better-auth@1.7.4`): `betterAuth` from `"better-auth"` in `apps/server/src/shared/auth.ts`, `drizzleAdapter` from `"@better-auth/drizzle-adapter/relations-v2"`, `expo` from `"@better-auth/expo"`. RPC middleware is `RpcMiddleware.Service` from `"effect/unstable/rpc"`. Session: `auth.api.getSession({ headers })`. See `.cursor/skills/better-auth/SKILL.md`.
 
-## Mobile runtime (T11)
+## Mobile runtime
 
 ```ts
 import { Layer, ManagedRuntime } from "effect"

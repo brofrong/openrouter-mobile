@@ -7,7 +7,7 @@ description: How this repo uses Better Auth 1.7 with Expo and Drizzle Relations 
 
 Installed: `better-auth@1.7.4`, `@better-auth/expo@1.7.4`, `@better-auth/drizzle-adapter@1.7.4`.
 
-## Server imports (`apps/server/src/shared/auth.ts`)
+## Server (`apps/server/src/shared/auth.ts`)
 
 ```ts
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
@@ -23,7 +23,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: { enabled: true }, // do NOT set requireEmailVerification
   plugins: [expo()],
-  trustedOrigins, // apps/server/src/shared/origins.ts — same Expo web ports as RPC CORS
+  trustedOrigins: [...trustedOrigins], // origins.ts is ReadonlyArray; Better Auth wants string[]
 })
 
 export type Session = typeof auth.$Infer.Session
@@ -33,7 +33,7 @@ export type Session = typeof auth.$Infer.Session
 - Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2` (NOT `better-auth/adapters/drizzle`, NOT `@better-auth/drizzle-adapter` default/v1).
 - Server plugin: `expo()` from `@better-auth/expo`.
 - Classic Drizzle client only: `createAuthDb` in `packages/db/src/client.ts` uses `drizzle-orm/postgres-js` + `postgres`. Effect `PgDrizzle` is not accepted by the adapter. `drizzle-orm/bun-sql` fails under `bun x auth generate` (CLI loads config with Node/jiti; `bun` is not resolvable).
-- Mount `auth.handler` on the same Effect `HttpRouter` as RPC (`HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
+- Mount `auth.handler` on the same Effect `HttpRouter` as RPC in `apps/server/src/shared/AuthHttp.ts` (`HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
 - Email/password enabled; do not require email verification for MVP.
 - Env: `BETTER_AUTH_SECRET` (>=32 chars), `BETTER_AUTH_URL`. Read by Better Auth from `process.env` (Bun `.env`). `AppConfig` also requires `BETTER_AUTH_SECRET`.
 
@@ -45,14 +45,14 @@ bun run --filter @openrouter-mobile/db db:generate
 bun run db:migrate
 ```
 
-Generated file exports tables plus `authRelations` via `defineRelationsPart`. Merge after app relations:
+Generated file exports tables plus `authRelations` via `defineRelationsPart`. Merge after app relations in `packages/db/src/relations.ts`:
 
 ```ts
 import { defineRelations } from "drizzle-orm"
 import * as schema from "./schema"
 import { authRelations } from "./schema/auth"
 
-export const appRelations = defineRelations(schema, (r) => ({ /* chats, messages, jobs */ }))
+export const appRelations = defineRelations(schema, (r) => ({ /* chats, messages, generationJobs */ }))
 export const relations = { ...appRelations, ...authRelations }
 ```
 
@@ -61,8 +61,10 @@ export const relations = { ...appRelations, ...authRelations }
 ## RPC session middleware (`apps/server/src/shared/AuthMiddleware.ts`)
 
 ```ts
+import { Context, Effect, Layer } from "effect"
 import { RpcMiddleware } from "effect/unstable/rpc"
 import { AppError } from "@openrouter-mobile/domain"
+import { auth, type Session } from "./auth"
 
 export class CurrentSession extends Context.Service<CurrentSession, Session>()(
   "@openrouter-mobile/server/CurrentSession",
@@ -72,18 +74,33 @@ export class AuthMiddleware extends RpcMiddleware.Service<AuthMiddleware, {
   provides: CurrentSession
 }>()("@openrouter-mobile/server/AuthMiddleware", { error: AppError }) {}
 
-// Layer.succeed(AuthMiddleware, (effect, { headers }) =>
-//   auth.api.getSession({ headers: webHeaders }) then Effect.provideService(effect, CurrentSession, session)
-// )
+export const AuthMiddlewareLive = Layer.succeed(
+  AuthMiddleware,
+  (effect, { headers }) =>
+    Effect.tryPromise({
+      try: () => auth.api.getSession({ headers: toWebHeaders(headers) }),
+      catch: () => unauthorized(),
+    }).pipe(
+      Effect.flatMap((session) =>
+        session
+          ? Effect.provideService(effect, CurrentSession, session)
+          : Effect.fail(unauthorized()),
+      ),
+    ),
+)
 ```
 
-Apply to every procedure except Health: `ChatRpcs.omit(...).middleware(AuthMiddleware).merge(HealthRpcs)`.
+Apply to every procedure except Health in `apps/server/src/app/ServerRpcs.ts`:
 
-Server session: `auth.api.getSession({ headers })` with a Web `Headers` built from RPC `headers` (Effect headers are lowercase; include `cookie`).
+```ts
+export class ServerRpcs extends ChatRpcs.merge(JobRpcs, MediaRpcs)
+  .middleware(AuthMiddleware)
+  .merge(HealthRpcs) {}
+```
 
-## Expo client (T11)
+The client contract remains `AppRpcs` in `packages/rpc/src/AppRpcs.ts` (no middleware). Server session: `auth.api.getSession({ headers })` with a Web `Headers` built from RPC `headers` (Effect headers are lowercase; include `cookie`).
 
-`apps/mobile/src/shared/auth-client.ts`:
+## Expo client (`apps/mobile/src/shared/auth-client.ts`)
 
 ```ts
 import { createAuthClient } from "better-auth/react"
@@ -106,7 +123,7 @@ export const authClient = createAuthClient({
 - On web the Expo plugin does **not** persist `Set-Cookie` into storage; it leaves `credentials` alone so the browser cookie jar is used. RPC HTTP therefore uses `credentials: "include"` on web and `omit` on native.
 - RPC: `headers: { Cookie: await authClient.getCookie() }` via `HttpClientRequest.setHeader(..., "cookie", cookie)`, native fetch `credentials: "omit"`.
 - Cookie header format from sign-in `Set-Cookie`: `Cookie: better-auth.session_token=<token>.<url-encoded-hmac>`
-- Root layout: no session → `/sign-in`; signed-in users see tabs. Sign-out is the tabs header button.
+- Root layout (`apps/mobile/src/app/_layout.tsx`): no session → `/sign-in`; signed-in users see tabs. Sign-out is the tabs header button.
 
 Official Better Auth skill pack: `.cursor/skills/better-auth-official/`. Prefer this repo skill for stack and MVP scope: no email verification, adapter path `@better-auth/drizzle-adapter/relations-v2` (not `better-auth/adapters/drizzle`), and no Next.js/Prisma handlers. Use the official pack for library API details.
 
