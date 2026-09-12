@@ -35,7 +35,7 @@ bun run --filter @openrouter-mobile/server start   # or `dev`; PORT if 3000 take
 bun run --filter @openrouter-mobile/mobile web
 ```
 
-Native: `bun run --filter @openrouter-mobile/mobile start` (then iOS / Android).
+Root `bun run dev` is Turbo (Expo `start` + server `--watch`). Smoke wants `mobile web` plus an explicit server `PORT`. Native: `bun run --filter @openrouter-mobile/mobile start` (then iOS / Android).
 
 ### Port 3000
 
@@ -67,8 +67,7 @@ Copy `.env.example` to `.env`. Required / used vars:
 | `EXPO_PUBLIC_AUTH_URL` | mobile | Better Auth base URL (`/api/auth/*`). |
 | `EXPO_PUBLIC_RPC_HTTP_URL` | mobile | Unary RPC, default `http://localhost:3000/rpc`. |
 | `EXPO_PUBLIC_RPC_WS_URL` | mobile | Streams, default `ws://localhost:3000/rpc/ws`. |
-| `RPC_HTTP_URL` / `RPC_WS_URL` | optional | Same URLs for non-Expo tooling. |
-| `OPENROUTER_MODEL` | server | Optional chat model override. |
+| `OPENROUTER_MODEL` | server | Optional chat model override (`AppConfig` default `openai/gpt-4o-mini`). |
 
 ## Quality
 

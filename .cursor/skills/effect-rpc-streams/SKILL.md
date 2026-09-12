@@ -9,7 +9,7 @@ Producer: persist → publish (never publish first).
 Consumer: subscribe live (wait until subscribed) → replay seq > afterSeq → concat live filtered seq > max(replayed).
 Stream procedure payloads have `afterSeq: Schema.optionalKey(Schema.Number)` (`ChatSubscribe`, `JobSubscribe`). `ChatMessages` may also take `afterSeq` as an optional history cursor. `ChatSend` is unary (starts generation; do not reconnect through it).
 Client stores last `seq` from the stream and sends it on reconnect (`apps/mobile/src/shared/afterSeq.ts`).
-Do not use Socket.IO. Transports are `RpcServer.layerProtocolHttp` and `RpcServer.layerProtocolWebsocket` only.
+Do not use Socket.IO. Live server transports are `RpcServer.layerHttp({ protocol: "http" | "websocket" })`.
 
 ## Installed APIs (`effect@4.0.0-rc.113`)
 
@@ -118,9 +118,22 @@ export const layerProtocolWebsocket = (options: {
 }): Layer.Layer<Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 ```
 
-Server wiring in `apps/server/src/app/main.ts` (port from `AppConfig`, default 3000):
+Server wiring in `apps/server/src/app/main.ts`. Cookie CORS must stay (`credentials: true`, `allowedOrigins: corsAllowedOrigins`). Port comes from `AppConfig` via `Layer.unwrap` (default 3000):
 
 ```ts
+import { Effect, Layer } from "effect"
+import { HttpRouter } from "effect/unstable/http"
+import { RpcSerialization, RpcServer } from "effect/unstable/rpc"
+import { BunHttpServer } from "@effect/platform-bun"
+import { AppConfig } from "../shared/config"
+import { corsAllowedOrigins } from "../shared/origins"
+
+const FeatureInfra = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterChatLive,
+  OpenRouterMediaLive,
+).pipe(Layer.provideMerge(DbLive))
+
 const RpcHttp = RpcServer.layerHttp({
   group: ServerRpcs,
   path: "/rpc",
@@ -131,16 +144,27 @@ const RpcWs = RpcServer.layerHttp({
   path: "/rpc/ws",
   protocol: "websocket",
 })
-const RpcRoutes = Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
-  Layer.provide(HealthLive),
-  Layer.provide(ChatLive),
-  Layer.provide(GenerationLive),
-  Layer.provide(AuthMiddlewareLive),
-  Layer.provide(FeatureInfra),
-  Layer.provide(RpcSerialization.layerNdjson),
+const RpcRoutes = HttpRouter.cors({
+  allowedOrigins: corsAllowedOrigins,
+  credentials: true,
+}).pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
+      Layer.provide(HealthLive),
+      Layer.provide(ChatLive),
+      Layer.provide(GenerationLive),
+      Layer.provide(AuthMiddlewareLive),
+      Layer.provide(FeatureInfra),
+      Layer.provide(RpcSerialization.layerNdjson),
+    ),
+  ),
 )
-const HttpLive = HttpRouter.serve(RpcRoutes).pipe(
-  Layer.provide(BunHttpServer.layer({ hostname: "0.0.0.0", port })),
+const HttpLive = Layer.unwrap(
+  Effect.map(AppConfig, ({ port }) =>
+    HttpRouter.serve(RpcRoutes).pipe(
+      Layer.provide(BunHttpServer.layer({ hostname: "0.0.0.0", port })),
+    ),
+  ),
 )
 ```
 

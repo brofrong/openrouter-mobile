@@ -16,6 +16,12 @@ import { betterAuth } from "better-auth"
 import { account, createAuthDb, session, user, verification } from "@openrouter-mobile/db"
 import { trustedOrigins } from "./origins"
 
+const databaseUrl =
+  process.env.DATABASE_URL ??
+  "postgres://openrouter:openrouter@localhost:5432/openrouter"
+
+const db = createAuthDb(databaseUrl)
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -61,9 +67,10 @@ export const relations = { ...appRelations, ...authRelations }
 ## RPC session middleware (`apps/server/src/shared/AuthMiddleware.ts`)
 
 ```ts
-import { Context, Effect, Layer } from "effect"
-import { RpcMiddleware } from "effect/unstable/rpc"
 import { AppError } from "@openrouter-mobile/domain"
+import { Context, Effect, Layer } from "effect"
+import type { Headers } from "effect/unstable/http/Headers"
+import { RpcMiddleware } from "effect/unstable/rpc"
 import { auth, type Session } from "./auth"
 
 export class CurrentSession extends Context.Service<CurrentSession, Session>()(
@@ -73,6 +80,17 @@ export class CurrentSession extends Context.Service<CurrentSession, Session>()(
 export class AuthMiddleware extends RpcMiddleware.Service<AuthMiddleware, {
   provides: CurrentSession
 }>()("@openrouter-mobile/server/AuthMiddleware", { error: AppError }) {}
+
+const unauthorized = () =>
+  new AppError({ code: "UNAUTHORIZED", message: "Not signed in" })
+
+const toWebHeaders = (headers: Headers): globalThis.Headers => {
+  const webHeaders = new globalThis.Headers()
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") webHeaders.append(key, value)
+  }
+  return webHeaders
+}
 
 export const AuthMiddlewareLive = Layer.succeed(
   AuthMiddleware,
@@ -103,12 +121,34 @@ The client contract remains `AppRpcs` in `packages/rpc/src/AppRpcs.ts` (no middl
 ## Expo client (`apps/mobile/src/shared/auth-client.ts`)
 
 ```ts
-import { createAuthClient } from "better-auth/react"
 import { expoClient } from "@better-auth/expo/client"
+import { createAuthClient } from "better-auth/react"
 import * as SecureStore from "expo-secure-store"
+import { Platform } from "react-native"
+import { authUrl } from "./env"
+
+const webStorage = {
+  getItem(key: string): string | null {
+    try {
+      return globalThis.localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  setItem(key: string, value: string): void {
+    globalThis.localStorage.setItem(key, value)
+  },
+  getItemAsync(key: string): Promise<string | null> {
+    return Promise.resolve(webStorage.getItem(key))
+  },
+  setItemAsync(key: string, value: string): Promise<void> {
+    webStorage.setItem(key, value)
+    return Promise.resolve()
+  },
+}
 
 export const authClient = createAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_AUTH_URL,
+  baseURL: authUrl,
   plugins: [
     expoClient({
       scheme: "openrouter-mobile",

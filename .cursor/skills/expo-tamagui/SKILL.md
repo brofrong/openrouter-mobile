@@ -13,10 +13,9 @@ Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@
 - Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
 - Effect HTTP: `expo/fetch` for FetchHttpClient (`apps/mobile/src/shared/http.ts`)
 - WebSocket: `binaryType = "arraybuffer"` (`apps/mobile/src/shared/ws.ts`)
-- Upload files via HTTP, then pass the returned id over RPC
 
 ## Do not
-- Nested `File` in RPC payloads
+- Nested `File` in RPC payloads (no HTTP upload route; media jobs are stubs; `AudioTranscribe` takes a string `assetId`)
 - Import `apps/server` from `apps/mobile`
 - Install TanStack Query
 - Force root TypeScript 7 onto the Expo app
