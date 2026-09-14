@@ -5,6 +5,10 @@ import { authRelations } from "./schema/auth";
 export const appRelations = defineRelations(schema, (r) => ({
   chats: {
     messages: r.many.messages(),
+    jobs: r.many.generationJobs({
+      from: r.generationJobs.chatId,
+      to: r.chats.id,
+    }),
     user: r.one.user({
       from: r.chats.userId,
       to: r.user.id,
@@ -19,6 +23,10 @@ export const appRelations = defineRelations(schema, (r) => ({
     }),
   },
   generationJobs: {
+    chat: r.one.chats({
+      from: r.generationJobs.chatId,
+      to: r.chats.id,
+    }),
     user: r.one.user({
       from: r.generationJobs.userId,
       to: r.user.id,
