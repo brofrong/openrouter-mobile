@@ -1,16 +1,22 @@
 import { chats, messages } from "@openrouter-mobile/db";
 import {
   AppError,
+  ChatDoneEvent,
+  ChatErrorEvent,
   type ChatId,
+  ChatJobEvent,
   type ChatKind,
   ChatMessagePage,
+  type ChatStreamEvent,
+  ChatTitleEvent,
+  ChatTokenEvent,
+  ChatUserEvent,
   decodeStoredContent,
   encodeStoredContent,
   Message,
   type MessageId,
   type OutputModality,
   type ReasoningEffort,
-  TokenChunk,
 } from "@openrouter-mobile/domain";
 import { ChatRpcs } from "@openrouter-mobile/rpc";
 import { and, eq } from "drizzle-orm";
@@ -54,67 +60,197 @@ const notFound = () =>
     message: "Chat not found",
   });
 
+const asRecord = (
+  payload: unknown,
+): { readonly [key: string]: unknown } | undefined =>
+  payload !== null && typeof payload === "object"
+    ? (payload as { readonly [key: string]: unknown })
+    : undefined;
+
+const payloadTag = (payload: unknown): string | undefined => {
+  const record = asRecord(payload);
+  return typeof record?._tag === "string" ? record._tag : undefined;
+};
+
 const tokenText = (payload: unknown): string => {
   if (typeof payload === "string") {
     return payload;
   }
-  if (
-    payload !== null &&
-    typeof payload === "object" &&
-    "text" in payload &&
-    typeof payload.text === "string"
-  ) {
-    return payload.text;
+  const record = asRecord(payload);
+  if (record === undefined) {
+    return "";
+  }
+  const tag = payloadTag(payload);
+  if (tag === "token" || (tag === undefined && record.title === undefined)) {
+    return typeof record.text === "string" ? record.text : "";
   }
   return "";
 };
 
-const tokenTitle = (payload: unknown): string | undefined => {
-  if (
-    payload !== null &&
-    typeof payload === "object" &&
-    "title" in payload &&
-    typeof payload.title === "string" &&
-    payload.title.length > 0
-  ) {
-    return payload.title;
+const streamErrorCode = (code: unknown): ChatErrorEvent["code"] =>
+  code === "STREAM_GONE" || code === "VALIDATION" || code === "OPENROUTER"
+    ? code
+    : "OPENROUTER";
+
+const isDoneOrErrorPayload = (payload: unknown): boolean => {
+  const tag = payloadTag(payload);
+  if (tag === "done" || tag === "error") {
+    return true;
   }
-  return undefined;
+  if (tag !== undefined) {
+    return false;
+  }
+  const record = asRecord(payload);
+  return typeof record?.error === "string" && record.error.length > 0;
+};
+
+const inProgressText = (
+  rowsDesc: ReadonlyArray<{ readonly payload: unknown }>,
+): string => {
+  const parts: Array<string> = [];
+  for (const row of rowsDesc) {
+    if (isDoneOrErrorPayload(row.payload)) {
+      break;
+    }
+    const text = tokenText(row.payload);
+    const tag = payloadTag(row.payload);
+    if (tag === "token" || (tag === undefined && text.length > 0)) {
+      parts.push(text);
+    }
+  }
+  parts.reverse();
+  return parts.join("");
 };
 
 type GenerationErrorPayload = {
-  readonly text: string;
+  readonly _tag: "error";
   readonly error: string;
-  readonly code: AppError["code"];
+  readonly code: ChatErrorEvent["code"];
 };
 
 const isGenerationErrorPayload = (
   payload: unknown,
 ): payload is GenerationErrorPayload =>
-  payload !== null &&
-  typeof payload === "object" &&
-  "error" in payload &&
-  typeof payload.error === "string" &&
-  payload.error.length > 0;
+  isDoneOrErrorPayload(payload) && payloadTag(payload) !== "done";
 
 const generationErrorPayload = (error: AppError): GenerationErrorPayload => ({
-  text: "",
+  _tag: "error",
   error: error.message,
-  code: error.code,
+  code: streamErrorCode(error.code),
 });
 
-const generationErrorFromPayload = (payload: unknown): AppError | undefined => {
-  if (!isGenerationErrorPayload(payload)) {
-    return undefined;
+const MessageJson = Schema.toCodecJson(Message);
+
+const encodeMessage = (message: Message) =>
+  Schema.encodeUnknownEffect(MessageJson)(message).pipe(
+    Effect.mapError(unexpected),
+  );
+
+const decodeStoredMessage = (value: unknown) =>
+  Schema.decodeUnknownEffect(MessageJson)(value).pipe(
+    Effect.mapError(unexpected),
+  );
+
+const toChatStreamEvent = (
+  seq: number,
+  payload: unknown,
+): Effect.Effect<ChatStreamEvent | undefined, AppError> => {
+  const record = asRecord(payload);
+  if (record === undefined) {
+    return Effect.succeed(undefined);
   }
-  const code =
-    payload.code === "STREAM_GONE" || payload.code === "OPENROUTER"
-      ? payload.code
-      : "OPENROUTER";
-  return new AppError({
-    code,
-    message: payload.error,
-  });
+  const tag = payloadTag(payload);
+  if (tag === "user") {
+    return decodeStoredMessage(record.message).pipe(
+      Effect.map(
+        (message) =>
+          new ChatUserEvent({
+            _tag: "user",
+            seq,
+            message,
+          }),
+      ),
+    );
+  }
+  if (tag === "token") {
+    return Effect.succeed(
+      new ChatTokenEvent({
+        _tag: "token",
+        seq,
+        text: typeof record.text === "string" ? record.text : "",
+      }),
+    );
+  }
+  if (tag === "title") {
+    return Effect.succeed(
+      new ChatTitleEvent({
+        _tag: "title",
+        seq,
+        title: typeof record.title === "string" ? record.title : "",
+      }),
+    );
+  }
+  if (tag === "error") {
+    return Effect.succeed(
+      new ChatErrorEvent({
+        _tag: "error",
+        seq,
+        error: typeof record.error === "string" ? record.error : "",
+        code: streamErrorCode(record.code),
+      }),
+    );
+  }
+  if (tag === "done") {
+    return decodeStoredMessage(record.message).pipe(
+      Effect.map(
+        (message) =>
+          new ChatDoneEvent({
+            _tag: "done",
+            seq,
+            message,
+          }),
+      ),
+    );
+  }
+  if (tag === "job") {
+    return Schema.decodeUnknownEffect(ChatJobEvent)({
+      _tag: "job",
+      seq,
+      jobId: record.jobId,
+      status: record.status,
+      ...(typeof record.url === "string" ? { url: record.url } : {}),
+      ...(typeof record.error === "string" ? { error: record.error } : {}),
+    }).pipe(Effect.mapError(unexpected));
+  }
+  if (typeof record.error === "string" && record.error.length > 0) {
+    return Effect.succeed(
+      new ChatErrorEvent({
+        _tag: "error",
+        seq,
+        error: record.error,
+        code: streamErrorCode(record.code),
+      }),
+    );
+  }
+  if (typeof record.title === "string" && record.title.length > 0) {
+    return Effect.succeed(
+      new ChatTitleEvent({
+        _tag: "title",
+        seq,
+        title: record.title,
+      }),
+    );
+  }
+  if (typeof record.text === "string") {
+    return Effect.succeed(
+      new ChatTokenEvent({
+        _tag: "token",
+        seq,
+        text: record.text,
+      }),
+    );
+  }
+  return Effect.succeed(undefined);
 };
 
 const toMessage = (row: typeof messages.$inferSelect) =>
@@ -231,9 +367,23 @@ export const listMessages = (payload: {
   readonly before?: MessageId;
 }) =>
   Effect.gen(function* () {
-    yield* requireOwnedChat(payload.chatId);
+    const chat = yield* requireOwnedChat(payload.chatId);
     const db = yield* AppDb;
     const limit = messagePageLimit(payload.limit);
+    const streamRows = yield* db.query.streamEvents
+      .findMany({
+        where: { streamId: payload.chatId },
+        orderBy: { seq: "desc" },
+      })
+      .pipe(Effect.mapError(unexpected));
+    const inProgress = inProgressText(streamRows);
+    const jobs: ChatMessagePage["jobs"] = [];
+    const streamPage = {
+      headSeq: streamRows[0]?.seq ?? 0,
+      generating: chat.generating || jobs.length > 0,
+      jobs,
+      ...(inProgress.length > 0 ? { inProgress } : {}),
+    };
 
     let cursorCreatedAt: Date | undefined;
     if (payload.before !== undefined) {
@@ -249,9 +399,7 @@ export const listMessages = (payload: {
         return new ChatMessagePage({
           messages: [],
           hasMore: false,
-          headSeq: 0,
-          generating: false,
-          jobs: [],
+          ...streamPage,
         });
       }
       cursorCreatedAt = before.createdAt;
@@ -280,9 +428,7 @@ export const listMessages = (payload: {
     return new ChatMessagePage({
       messages: decoded,
       hasMore,
-      headSeq: 0,
-      generating: false,
-      jobs: [],
+      ...streamPage,
     });
   });
 
@@ -308,7 +454,7 @@ const tokenPayloads = (
             part._tag === "usage" ? Ref.set(usageRef, part.usage) : Effect.void,
           ),
           Stream.filter(isTextPart),
-          Stream.map((part) => ({ text: part.text })),
+          Stream.map((part) => ({ _tag: "token" as const, text: part.text })),
           Stream.catchTag("AppError", (error) =>
             Stream.succeed(generationErrorPayload(error)),
           ),
@@ -372,14 +518,29 @@ const runGeneration = (options: {
     if (content.length === 0) {
       return;
     }
-    yield* options.db
+    const inserted = yield* options.db
       .insert(messages)
       .values({
         chatId: options.chatId,
         role: "assistant",
         content,
       })
+      .returning();
+    const assistantRow = inserted[0];
+    if (assistantRow === undefined) {
+      return;
+    }
+    const message = yield* toMessage(assistantRow);
+    const encoded = yield* encodeMessage(message);
+    yield* options.db
+      .update(chats)
+      .set({ generating: false })
+      .where(eq(chats.id, options.chatId))
       .pipe(Effect.asVoid);
+    yield* options.durable.append(options.chatId, "token", {
+      _tag: "done",
+      message: encoded,
+    });
   }).pipe(
     Effect.mapError(unexpected),
     Effect.catchTag("AppError", (error) =>
@@ -455,7 +616,7 @@ const maybeTitleFromFirstMessage = (options: {
       return;
     }
     yield* options.durable
-      .append(options.chatId, "token", { text: "", title: row.title })
+      .append(options.chatId, "token", { _tag: "title", title: row.title })
       .pipe(Effect.mapError(unexpected), Effect.asVoid);
   }).pipe(Effect.catchTag("AppError", () => Effect.void));
 
@@ -492,6 +653,18 @@ export const sendMessage = (payload: {
     const db = yield* AppDb;
     const openrouter = yield* OpenRouterChat;
     const durable = yield* DurableStream;
+    const locked = yield* db
+      .update(chats)
+      .set({ generating: true })
+      .where(and(eq(chats.id, chat.id), eq(chats.generating, false)))
+      .returning({ id: chats.id })
+      .pipe(Effect.mapError(unexpected));
+    if (locked[0] === undefined) {
+      return yield* new AppError({
+        code: "VALIDATION",
+        message: "Already generating",
+      });
+    }
 
     const history = yield* db.query.messages
       .findMany({
@@ -522,6 +695,11 @@ export const sendMessage = (payload: {
     if (userRow === undefined) {
       return yield* unexpected(new Error("Message insert returned no row"));
     }
+    const userMessage = yield* toMessage(userRow);
+    const encoded = yield* encodeMessage(userMessage);
+    yield* durable
+      .append(chat.id, "token", { _tag: "user", message: encoded })
+      .pipe(Effect.mapError(unexpected), Effect.asVoid);
 
     if (history.length === 0) {
       yield* Effect.forkDetach(
@@ -548,10 +726,18 @@ export const sendMessage = (payload: {
         db,
         ...(payload.model === undefined ? {} : { model: payload.model }),
         ...(payload.effort === undefined ? {} : { effort: payload.effort }),
-      }),
+      }).pipe(
+        Effect.ensuring(
+          db
+            .update(chats)
+            .set({ generating: false })
+            .where(eq(chats.id, chat.id))
+            .pipe(Effect.asVoid, Effect.ignore),
+        ),
+      ),
     );
 
-    return yield* toMessage(userRow);
+    return userMessage;
   });
 
 export const listModels = (payload: {
@@ -578,26 +764,10 @@ export const subscribeTokens = (chatId: ChatId, afterSeq?: number) =>
       const durable = yield* DurableStream;
       return durable.subscribe(chatId, afterSeq).pipe(
         Stream.filter((event) => event.kind === "token"),
-        Stream.mapEffect((event) => {
-          const failure = generationErrorFromPayload(event.payload);
-          if (failure !== undefined) {
-            return Effect.succeed(
-              new TokenChunk({
-                seq: event.seq,
-                text: tokenText(event.payload),
-                error: failure.message,
-              }),
-            );
-          }
-          const title = tokenTitle(event.payload);
-          return Effect.succeed(
-            new TokenChunk({
-              seq: event.seq,
-              text: tokenText(event.payload),
-              ...(title === undefined ? {} : { title }),
-            }),
-          );
-        }),
+        Stream.mapEffect((event) =>
+          toChatStreamEvent(event.seq, event.payload),
+        ),
+        Stream.filter((event): event is ChatStreamEvent => event !== undefined),
         Stream.mapError((error) =>
           error instanceof AppError
             ? error

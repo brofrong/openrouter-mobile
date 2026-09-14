@@ -5,11 +5,11 @@ import {
   ChatId,
   ChatKind,
   ChatMessagePage,
+  ChatStreamEvent,
   Message,
   MessageId,
   OutputModality,
   ReasoningEffort,
-  TokenChunk,
 } from "@openrouter-mobile/domain";
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
@@ -84,7 +84,7 @@ export class ChatRpcs extends RpcGroup.make(
       chatId: ChatId,
       afterSeq: Schema.optionalKey(Schema.Number),
     },
-    success: TokenChunk,
+    success: ChatStreamEvent,
     error: AppError,
     stream: true,
   }),

@@ -9,6 +9,7 @@ import {
 import {
   AppError,
   CatalogModelPage,
+  type ChatStreamEvent,
   type MessageId,
 } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
@@ -52,6 +53,23 @@ const MOCK_TOKENS = ["Hel", "lo", " ", "from", " ", "mock"] as const;
 const hasRealOpenRouterKey = isUsableOpenRouterKeyValue(
   process.env.OPENROUTER_API_KEY ?? "",
 );
+
+const tokens = (events: ReadonlyArray<ChatStreamEvent>) =>
+  events.filter(
+    (event): event is Extract<ChatStreamEvent, { _tag: "token" }> =>
+      event._tag === "token",
+  );
+
+const untilTerminal = (
+  chatId: Parameters<typeof subscribeTokens>[0],
+  afterSeq?: number,
+) =>
+  subscribeTokens(chatId, afterSeq).pipe(
+    Stream.takeUntil(
+      (event) => event._tag === "done" || event._tag === "error",
+    ),
+    Stream.runCollect,
+  );
 
 const textPart = (text: string) => ({ _tag: "text" as const, text }) as const;
 
@@ -275,7 +293,7 @@ test("ChatCreate + ChatSend + ChatSubscribe receive mocked tokens", async () => 
       const chunks = yield* asUser(
         session,
         subscribeTokens(chat.id, 0).pipe(
-          Stream.filter((chunk) => chunk.text.length > 0),
+          Stream.filter((event) => event._tag === "token"),
           Stream.take(MOCK_TOKENS.length),
           Stream.runCollect,
         ),
@@ -306,6 +324,121 @@ test("ChatCreate + ChatSend + ChatSubscribe receive mocked tokens", async () => 
   expect(result.events.length).toBeGreaterThanOrEqual(MOCK_TOKENS.length);
 });
 
+test("ChatSend broadcasts user, tokens, and done to two subscribers", async () => {
+  const result = await run(
+    Effect.gen(function* () {
+      const session = yield* insertUser("two-subscribers");
+      const chat = yield* asUser(session, createChat());
+      const first = yield* asUser(
+        session,
+        untilTerminal(chat.id).pipe(Effect.forkChild),
+      );
+      const second = yield* asUser(
+        session,
+        untilTerminal(chat.id).pipe(Effect.forkChild),
+      );
+      yield* waitUntilLive;
+      yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
+      const a = yield* Fiber.join(first);
+      const b = yield* Fiber.join(second);
+      return { a, b };
+    }),
+  );
+
+  expect(result.a[0]?._tag).toBe("user");
+  expect(result.b[0]?._tag).toBe("user");
+  expect(tokens(result.a).map((event) => event.text)).toEqual([...MOCK_TOKENS]);
+  expect(tokens(result.b).map((event) => event.text)).toEqual([...MOCK_TOKENS]);
+  expect(result.a[result.a.length - 1]?._tag).toBe("done");
+  expect(result.b[result.b.length - 1]?._tag).toBe("done");
+});
+
+test("mid-stream ChatMessages exposes generating inProgress and later tokens from headSeq", async () => {
+  const result = await run(
+    Effect.gen(function* () {
+      const session = yield* insertUser("mid-stream-page");
+      const chat = yield* asUser(session, createChat());
+      const first = yield* asUser(
+        session,
+        subscribeTokens(chat.id, 0).pipe(
+          Stream.filter((event) => event._tag === "token"),
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.forkChild,
+        ),
+      );
+      yield* waitUntilLive;
+      yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
+      const seen = yield* Fiber.join(first);
+      const lastSeen = seen[seen.length - 1];
+      if (lastSeen === undefined) {
+        return yield* Effect.die("subscriber did not see tokens");
+      }
+      const page = yield* asUser(session, listMessages({ chatId: chat.id }));
+      const laterEvents = yield* asUser(
+        session,
+        subscribeTokens(chat.id, page.headSeq).pipe(
+          Stream.takeUntil(
+            (event) => event._tag === "done" || event._tag === "error",
+          ),
+          Stream.runCollect,
+        ),
+      );
+      return {
+        seen,
+        page,
+        later: tokens(laterEvents),
+        lastSeen,
+      };
+    }),
+  );
+
+  expect(result.page.generating).toBe(true);
+  expect(result.page.inProgress).toBeDefined();
+  expect(result.page.inProgress?.length).toBeGreaterThan(0);
+  expect(result.page.headSeq).toBeGreaterThanOrEqual(result.lastSeen.seq);
+  expect(result.later.every((event) => event.seq > result.page.headSeq)).toBe(
+    true,
+  );
+});
+
+test("after generation ChatMessages has the assistant and is idle", async () => {
+  const result = await run(
+    Effect.gen(function* () {
+      const session = yield* insertUser("after-generation");
+      const chat = yield* asUser(session, createChat());
+      yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
+      yield* asUser(session, untilTerminal(chat.id));
+      return yield* asUser(session, listMessages({ chatId: chat.id }));
+    }),
+  );
+
+  expect(result.messages.some((message) => message.role === "assistant")).toBe(
+    true,
+  );
+  expect(result.generating).toBe(false);
+  expect(result.inProgress).toBeUndefined();
+});
+
+test("second ChatSend while generating is VALIDATION", async () => {
+  const result = await run(
+    Effect.gen(function* () {
+      const session = yield* insertUser("one-in-flight");
+      const chat = yield* asUser(session, createChat());
+      yield* asUser(
+        session,
+        sendMessage({ chatId: chat.id, content: "first" }),
+      );
+      return yield* asUser(
+        session,
+        sendMessage({ chatId: chat.id, content: "second" }),
+      ).pipe(Effect.result);
+    }),
+  );
+
+  expect(isCode(result, "VALIDATION")).toBe(true);
+});
+
 test("ChatSubscribe(afterSeq=n) resumes from the ledger after disconnect", async () => {
   const result = await run(
     Effect.gen(function* () {
@@ -314,7 +447,7 @@ test("ChatSubscribe(afterSeq=n) resumes from the ledger after disconnect", async
       const first = yield* asUser(
         session,
         subscribeTokens(chat.id, 0).pipe(
-          Stream.filter((chunk) => chunk.text.length > 0),
+          Stream.filter((event) => event._tag === "token"),
           Stream.take(2),
           Stream.runCollect,
           Effect.forkChild,
@@ -330,7 +463,7 @@ test("ChatSubscribe(afterSeq=n) resumes from the ledger after disconnect", async
       const rest = yield* asUser(
         session,
         subscribeTokens(chat.id, afterSeq).pipe(
-          Stream.filter((chunk) => chunk.text.length > 0),
+          Stream.filter((event) => event._tag === "token"),
           Stream.take(MOCK_TOKENS.length - 2),
           Stream.runCollect,
         ),
@@ -412,7 +545,7 @@ test("ChatSubscribe emits an OPENROUTER error chunk when generation errors", asy
         session,
         subscribeTokens(chat.id, 0).pipe(
           Stream.filter(
-            (chunk) => chunk.text.length > 0 || chunk.error !== undefined,
+            (event) => event._tag === "token" || event._tag === "error",
           ),
           Stream.take(2),
           Stream.runCollect,
@@ -428,8 +561,17 @@ test("ChatSubscribe emits an OPENROUTER error chunk when generation errors", asy
   );
 
   expect(result.userMessage.content).toBe("hi");
-  expect(result.chunks[0]?.text).toBe("Hel");
-  expect(result.chunks[1]?.error).toBe("upstream failed");
+  expect(result.chunks[0]?._tag).toBe("token");
+  expect(
+    result.chunks[0]?._tag === "token" ? result.chunks[0].text : undefined,
+  ).toBe("Hel");
+  expect(result.chunks[1]?._tag).toBe("error");
+  expect(
+    result.chunks[1]?._tag === "error" ? result.chunks[1].error : undefined,
+  ).toBe("upstream failed");
+  expect(
+    result.chunks[1]?._tag === "error" ? result.chunks[1].code : undefined,
+  ).toBe("OPENROUTER");
   expect(
     result.events.some(
       (event) =>
@@ -523,12 +665,12 @@ test("ChatSubscribe still delivers later tokens after a persisted OPENROUTER err
       const chunks = yield* asUser(
         session,
         subscribeTokens(chat.id, 0).pipe(
-          Stream.filter((chunk) => chunk.text.length > 0),
+          Stream.filter((event) => event._tag === "token"),
           Stream.take(2),
           Stream.runCollect,
         ),
       );
-      return chunks.map((chunk) => chunk.text);
+      return tokens(chunks).map((event) => event.text);
     }),
   );
 
@@ -543,7 +685,7 @@ test("first ChatSend names the chat from a summary and later sends do not", asyn
       const titles = yield* asUser(
         session,
         subscribeTokens(chat.id, 0).pipe(
-          Stream.filter((chunk) => chunk.title !== undefined),
+          Stream.filter((event) => event._tag === "title"),
           Stream.take(1),
           Stream.runCollect,
           Effect.forkChild,
@@ -553,6 +695,7 @@ test("first ChatSend names the chat from a summary and later sends do not", asyn
       yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
       const titleChunks = yield* Fiber.join(titles);
       const named = yield* asUser(session, listChats());
+      yield* asUser(session, untilTerminal(chat.id));
       yield* asUser(
         session,
         sendMessage({ chatId: chat.id, content: "second" }),
@@ -736,7 +879,7 @@ test("ChatList({ kind }) keeps chat kinds separate", async () => {
         return yield* asUser(
           session,
           subscribeTokens(chat.id, 0).pipe(
-            Stream.filter((chunk) => chunk.text.length > 0),
+            Stream.filter((event) => event._tag === "token"),
             Stream.take(1),
             Stream.runCollect,
           ),
