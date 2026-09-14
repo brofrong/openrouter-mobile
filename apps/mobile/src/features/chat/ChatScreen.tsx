@@ -330,6 +330,8 @@ export function ChatScreen() {
       if (load) {
         loadMessages(chatId);
       } else {
+        // Empty newly created chats skip ChatMessages and seed afterSeq 0
+        // so the first send can subscribe.
         setAfterSeq(chatId, 0);
         setStreamReady(true);
       }
