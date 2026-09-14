@@ -16,7 +16,7 @@ import {
   useState,
 } from "react";
 import { Pressable } from "react-native";
-import { Paragraph, ScrollView, Spinner, Text, YStack } from "tamagui";
+import { Paragraph, ScrollView, Spinner, Text } from "tamagui";
 import { useCategoryDefaultModel } from "../../entities/ai-config/use-ai-config";
 import { ChatMenu, ChatMenuButton } from "../../entities/chat/ChatMenu";
 import { ChatRenameDialog } from "../../entities/chat/ChatRenameDialog";
@@ -25,6 +25,7 @@ import { withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
+import { KeyboardScreen } from "../../shared/ui/KeyboardScreen";
 import { useChatRoute } from "../../shared/use-chat-route";
 import { useRpcStream } from "../../shared/use-rpc-stream";
 import { useStickToBottom } from "../../shared/use-stick-to-bottom";
@@ -548,7 +549,7 @@ export function ChatScreen() {
   );
 
   return (
-    <YStack flex={1} bg="$background">
+    <KeyboardScreen>
       <ChatMenu
         busy={busy}
         chats={chats}
@@ -621,6 +622,6 @@ export function ChatScreen() {
         onImagesChange={setAttachments}
         onSend={send}
       />
-    </YStack>
+    </KeyboardScreen>
   );
 }

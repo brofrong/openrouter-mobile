@@ -24,6 +24,7 @@ import { authClient } from "../../shared/auth-client";
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
+import { KeyboardScreen } from "../../shared/ui/KeyboardScreen";
 import { SignOutButton } from "../../shared/ui/SignOutButton";
 import { AiConfigTab } from "./AiConfigTab";
 import { AiUsageDashboard } from "./AiUsageDashboard";
@@ -37,7 +38,7 @@ export function ProfileScreen() {
   const [tab, setTab] = useState<ProfileTab>("profile");
 
   return (
-    <YStack bg="$background" flex={1}>
+    <KeyboardScreen behavior="padding">
       <XStack gap="$2" p="$3">
         <Button
           flex={1}
@@ -74,7 +75,7 @@ export function ProfileScreen() {
       ) : (
         <AiConfigTab />
       )}
-    </YStack>
+    </KeyboardScreen>
   );
 }
 

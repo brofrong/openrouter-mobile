@@ -30,6 +30,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerTitleAlign: "center",
         headerRight: () => <UserAvatarButton />,
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen

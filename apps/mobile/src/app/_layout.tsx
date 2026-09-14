@@ -11,6 +11,7 @@ import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useRef } from "react";
 import { Platform, useColorScheme } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Paragraph, TamaguiProvider, YStack } from "tamagui";
 import { tamaguiConfig } from "../../tamagui.config";
 import { APP_SANS, APP_SANS_NATIVE, useAppFonts } from "../shared/app-fonts";
@@ -74,13 +75,15 @@ export default function RootLayout() {
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme={themeName}>
-      <Head>
-        <title>OpenRouter</title>
-      </Head>
-      <ThemeProvider value={navigationTheme}>
-        <StatusBar style="auto" />
-        {content}
-      </ThemeProvider>
+      <KeyboardProvider>
+        <Head>
+          <title>OpenRouter</title>
+        </Head>
+        <ThemeProvider value={navigationTheme}>
+          <StatusBar style="auto" />
+          {content}
+        </ThemeProvider>
+      </KeyboardProvider>
     </TamaguiProvider>
   );
 }
