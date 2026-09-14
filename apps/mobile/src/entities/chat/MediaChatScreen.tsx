@@ -2,7 +2,7 @@ import {
   type Chat,
   type ChatId,
   type ChatKind,
-  type GenerationJobId,
+  type ChatStreamEvent,
   type MessageId,
   withChatTitle,
 } from "@openrouter-mobile/domain";
@@ -18,7 +18,7 @@ import {
 } from "react";
 import { Pressable } from "react-native";
 import { Paragraph, ScrollView, Spinner, Text } from "tamagui";
-import { withAfterSeq } from "../../shared/afterSeq";
+import { setAfterSeq, withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
 import { randomLocalId } from "../../shared/random-id";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
@@ -35,9 +35,11 @@ import { MediaComposer } from "./MediaComposer";
 import { type MediaResultKind, MediaThread } from "./MediaThread";
 import {
   appendTurn,
-  applyJobEvent,
+  applyChatJobEvent,
+  applyChatUserEvent,
   bindJob,
   failTurn,
+  hydrateJobs,
   MEDIA_MESSAGE_PAGE_SIZE,
   type MediaThreadItem,
   mergeOlderMessages,
@@ -131,19 +133,17 @@ export function MediaChatScreen({
   const defaultModelId = useCategoryDefaultModel(kind);
   const selected = useSelectedMediaModel(kind, defaultModelId, selectedId);
   const [composer, setComposer] = useState("");
-  const [jobId, setJobId] = useState<GenerationJobId | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [streamReady, setStreamReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<Chat | undefined>();
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string | undefined>();
-  const jobIdRef = useRef<GenerationJobId | undefined>(undefined);
   const loadingOlderRef = useRef(false);
   const loadedIdRef = useRef<ChatId | undefined>(undefined);
   const restoredIdRef = useRef<ChatId | undefined>(undefined);
   const selectedIdRef = useRef(selectedId);
-  jobIdRef.current = jobId;
   selectedIdRef.current = selectedId;
   const navigation = useNavigation();
   const selectedChat = chats.find((chat) => chat.id === selectedId);
@@ -314,16 +314,18 @@ export function MediaChatScreen({
               if (selectedIdRef.current !== chatId) {
                 return;
               }
-              const next = page.messages
+              const mapped = page.messages
                 .filter((message) => message.role !== "system")
                 .map(toMediaThreadItem);
               if (prepend) {
-                setItems((current) => mergeOlderMessages(current, next));
+                setItems((current) => mergeOlderMessages(current, mapped));
                 loadingOlderRef.current = false;
                 setLoadingOlder(false);
               } else {
                 pinToBottom();
-                setItems(next);
+                setItems(hydrateJobs(mapped, page.jobs));
+                setAfterSeq(chatId, page.headSeq);
+                setStreamReady(true);
                 setLoadingThread(false);
               }
               setHasMore(page.hasMore);
@@ -346,10 +348,9 @@ export function MediaChatScreen({
       setSelectedId(chatId);
       selectedIdRef.current = chatId;
       loadedIdRef.current = chatId;
+      setStreamReady(false);
       if (resetThread) {
         setItems([]);
-        setJobId(undefined);
-        jobIdRef.current = undefined;
         setHasMore(false);
         setLoadingThread(load);
       }
@@ -359,6 +360,11 @@ export function MediaChatScreen({
       pinToBottom();
       if (load) {
         loadMessages(chatId);
+      } else {
+        // Empty newly created chats skip ChatMessages and seed afterSeq 0
+        // so the first send can subscribe.
+        setAfterSeq(chatId, 0);
+        setStreamReady(true);
       }
     },
     [loadMessages, pinToBottom],
@@ -376,13 +382,12 @@ export function MediaChatScreen({
     }
     if (routeChatId === undefined) {
       loadingOlderRef.current = false;
+      setStreamReady(false);
       setSelectedId(undefined);
       selectedIdRef.current = undefined;
       loadedIdRef.current = undefined;
       restoredIdRef.current = undefined;
       setItems([]);
-      setJobId(undefined);
-      jobIdRef.current = undefined;
       setHasMore(false);
       setError(undefined);
       setLoadingThread(false);
@@ -457,7 +462,6 @@ export function MediaChatScreen({
     }
     const localId = randomLocalId();
     setComposer("");
-    setBusy(true);
     setError(undefined);
     pinToBottom();
     setItems((current) => appendTurn(current, { prompt, localId }));
@@ -477,11 +481,8 @@ export function MediaChatScreen({
             const message = formatRpcError(failure);
             setError(message);
             setItems((current) => failTurn(current, localId, message));
-            setBusy(false);
           },
           onSuccess: (job) => {
-            jobIdRef.current = job.id;
-            setJobId(job.id);
             setItems((current) => bindJob(current, localId, job.id));
             pinToBottom();
           },
@@ -490,63 +491,7 @@ export function MediaChatScreen({
     );
   };
 
-  const subscribeJobMake = useCallback(
-    (afterSeq?: number) =>
-      Effect.gen(function* () {
-        if (jobId === undefined) {
-          return yield* Effect.die("Media stream started without a job");
-        }
-        const rpc = yield* RpcWs;
-        return rpc.JobSubscribe(withAfterSeq({ jobId }, afterSeq));
-      }),
-    [jobId],
-  );
-
-  const onJobEvent = useCallback(
-    (event: {
-      status: "queued" | "running" | "completed" | "failed";
-      url?: string;
-      error?: string;
-    }) => {
-      const activeJobId = jobIdRef.current;
-      if (activeJobId === undefined) {
-        return;
-      }
-      setItems((current) => applyJobEvent(current, activeJobId, event));
-      if (event.status === "completed" || event.status === "failed") {
-        setBusy(false);
-        if (event.error !== undefined && event.error.length > 0) {
-          setError(event.error);
-        }
-      }
-      pinToBottom();
-    },
-    [pinToBottom],
-  );
-
-  const onJobStreamError = useCallback((message: string) => {
-    const activeJobId = jobIdRef.current;
-    setError(message);
-    setBusy(false);
-    if (activeJobId !== undefined) {
-      setItems((current) =>
-        applyJobEvent(current, activeJobId, {
-          status: "failed",
-          error: message,
-        }),
-      );
-    }
-  }, []);
-
-  useRpcStream({
-    enabled: jobId !== undefined,
-    key: jobId ?? "",
-    make: subscribeJobMake,
-    onChunk: onJobEvent,
-    onError: onJobStreamError,
-  });
-
-  const subscribeTitleMake = useCallback(
+  const subscribeMake = useCallback(
     (afterSeq?: number) =>
       Effect.gen(function* () {
         const rpc = yield* RpcWs;
@@ -557,29 +502,48 @@ export function MediaChatScreen({
     [selectedId],
   );
 
-  const onTitleChunk = useCallback((chunk: { title?: string }) => {
-    if (chunk.title === undefined || chunk.title.length === 0) {
-      return;
-    }
-    const chatId = selectedIdRef.current;
-    if (chatId === undefined) {
-      return;
-    }
-    setChats((current) =>
-      current.map((chat) =>
-        chat.id === chatId ? withChatTitle(chat, chunk.title as string) : chat,
-      ),
-    );
+  const onChunk = useCallback(
+    (event: ChatStreamEvent) => {
+      if (event._tag === "title" && event.title.length > 0) {
+        const chatId = selectedIdRef.current;
+        if (chatId !== undefined) {
+          setChats((current) =>
+            current.map((chat) =>
+              chat.id === chatId ? withChatTitle(chat, event.title) : chat,
+            ),
+          );
+        }
+      }
+      if (event._tag === "user") {
+        setItems((current) => applyChatUserEvent(current, event));
+        pinToBottom();
+        return;
+      }
+      if (event._tag === "job") {
+        setItems((current) => applyChatJobEvent(current, event));
+        if (event.status === "failed" && event.error !== undefined) {
+          setError(event.error);
+        }
+        pinToBottom();
+        return;
+      }
+      if (event._tag === "error") {
+        setError(event.error);
+      }
+    },
+    [pinToBottom],
+  );
+
+  const onStreamError = useCallback((message: string) => {
+    setError(message);
   }, []);
 
   useRpcStream({
-    enabled: selectedId !== undefined,
-    key: selectedId === undefined ? "" : `${kind}-title-${selectedId}`,
-    make: subscribeTitleMake,
-    onChunk: onTitleChunk,
-    onError: useCallback((message: string) => {
-      setError(message);
-    }, []),
+    enabled: selectedId !== undefined && streamReady,
+    key: selectedId ?? "",
+    make: subscribeMake,
+    onChunk,
+    onError: onStreamError,
   });
 
   const saveRename = (title: string) => {
@@ -624,10 +588,17 @@ export function MediaChatScreen({
     [isNearTop, loadOlder, onScroll],
   );
 
+  const jobBusy = items.some(
+    (item) =>
+      item.role === "assistant" &&
+      (item.status === "queued" || item.status === "running"),
+  );
+  const screenBusy = busy || jobBusy;
+
   return (
     <KeyboardScreen>
       <ChatMenu
-        busy={busy}
+        busy={screenBusy}
         chats={chats}
         error={error}
         onClose={() => {
@@ -689,7 +660,7 @@ export function MediaChatScreen({
         )}
       </ScrollView>
       <MediaComposer
-        busy={busy}
+        busy={screenBusy}
         composer={composer}
         kind={kind}
         placeholder={composerPlaceholder}

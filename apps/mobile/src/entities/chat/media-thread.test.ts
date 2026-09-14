@@ -2,14 +2,18 @@ import { expect, test } from "bun:test";
 import {
   type ChatId,
   ChatJobEvent,
+  ChatUserEvent,
   GenerationJob,
   type GenerationJobId,
+  Message,
+  type MessageId,
   type UserId,
 } from "@openrouter-mobile/domain";
 import { DateTime } from "effect";
 import {
   appendTurn,
   applyChatJobEvent,
+  applyChatUserEvent,
   applyJobEvent,
   bindJob,
   failTurn,
@@ -134,5 +138,76 @@ test("applyChatJobEvent updates the assistant by jobId", () => {
     jobId: "job-1",
     status: "completed",
     url: "https://cdn.example/clip.mp4",
+  });
+});
+
+const userMessage = new Message({
+  id: "m1" as MessageId,
+  chatId: "chat-1" as ChatId,
+  role: "user",
+  content: "a clip",
+  createdAt,
+});
+
+const userEvent = new ChatUserEvent({
+  _tag: "user",
+  seq: 1,
+  message: userMessage,
+});
+
+test("applyChatUserEvent appends an unseen user message", () => {
+  expect(applyChatUserEvent([], userEvent)).toEqual([
+    { id: "m1", role: "user", content: "a clip" },
+  ]);
+});
+
+test("applyChatUserEvent does not duplicate a known user id", () => {
+  const items = [{ id: "m1", role: "user" as const, content: "a clip" }];
+  expect(applyChatUserEvent(items, userEvent)).toEqual(items);
+});
+
+test("applyChatUserEvent replaces a local user with the same content", () => {
+  const pending = appendTurn([], { prompt: "a clip", localId: "t1" });
+  const next = applyChatUserEvent(pending, userEvent);
+  expect(next[0]).toEqual({ id: "m1", role: "user", content: "a clip" });
+  expect(next[1]).toEqual(pending[1]);
+});
+
+test("applyChatJobEvent appends a pending assistant when jobId is missing", () => {
+  const items = [{ id: "m1", role: "user" as const, content: "a clip" }];
+  const next = applyChatJobEvent(
+    items,
+    new ChatJobEvent({
+      _tag: "job",
+      seq: 2,
+      jobId: "job-1" as GenerationJobId,
+      status: "queued",
+    }),
+  );
+  expect(next).toHaveLength(2);
+  expect(next[1]).toMatchObject({
+    role: "assistant",
+    jobId: "job-1",
+    status: "queued",
+  });
+});
+
+test("applyChatJobEvent binds an unbound local assistant instead of duplicating", () => {
+  const pending = appendTurn([], { prompt: "a clip", localId: "t1" });
+  const next = applyChatJobEvent(
+    pending,
+    new ChatJobEvent({
+      _tag: "job",
+      seq: 2,
+      jobId: "job-1" as GenerationJobId,
+      status: "queued",
+    }),
+  );
+  expect(next).toHaveLength(2);
+  expect(next[1]).toEqual({
+    id: "local-t1-assistant",
+    role: "assistant",
+    jobId: "job-1",
+    status: "queued",
   });
 });

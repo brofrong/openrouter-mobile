@@ -1,4 +1,8 @@
-import type { ChatJobEvent, GenerationJob } from "@openrouter-mobile/domain";
+import type {
+  ChatJobEvent,
+  ChatUserEvent,
+  GenerationJob,
+} from "@openrouter-mobile/domain";
 
 export type MediaJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -105,15 +109,74 @@ export const applyJobEvent = (
     };
   });
 
+const jobPatch = (event: ChatJobEvent): JobEventPatch => ({
+  status: event.status,
+  ...(event.url === undefined ? {} : { url: event.url }),
+  ...(event.error === undefined ? {} : { error: event.error }),
+});
+
+export const applyChatUserEvent = (
+  items: ReadonlyArray<MediaThreadItem>,
+  event: ChatUserEvent,
+): ReadonlyArray<MediaThreadItem> => {
+  const mapped = toMediaThreadItem(event.message);
+  if (mapped.role !== "user") {
+    return items;
+  }
+  if (items.some((item) => item.id === mapped.id)) {
+    return items;
+  }
+  const localIndex = items.findIndex(
+    (item) =>
+      item.role === "user" &&
+      item.id.startsWith("local-") &&
+      item.content === mapped.content,
+  );
+  if (localIndex >= 0) {
+    return items.map((item, index) => (index === localIndex ? mapped : item));
+  }
+  return [...items, mapped];
+};
+
 export const applyChatJobEvent = (
   items: ReadonlyArray<MediaThreadItem>,
   event: ChatJobEvent,
-): ReadonlyArray<MediaThreadItem> =>
-  applyJobEvent(items, event.jobId, {
-    status: event.status,
-    ...(event.url === undefined ? {} : { url: event.url }),
-    ...(event.error === undefined ? {} : { error: event.error }),
-  });
+): ReadonlyArray<MediaThreadItem> => {
+  const patch = jobPatch(event);
+  if (
+    items.some((item) => item.role === "assistant" && item.jobId === event.jobId)
+  ) {
+    return applyJobEvent(items, event.jobId, patch);
+  }
+  const unboundIndex = items.findIndex(
+    (item) =>
+      item.role === "assistant" &&
+      item.jobId === undefined &&
+      item.id.startsWith("local-"),
+  );
+  if (unboundIndex >= 0) {
+    return applyJobEvent(
+      items.map((item, index) =>
+        index === unboundIndex && item.role === "assistant"
+          ? { ...item, jobId: event.jobId }
+          : item,
+      ),
+      event.jobId,
+      patch,
+    );
+  }
+  return [
+    ...items,
+    {
+      id: `job-${event.jobId}`,
+      role: "assistant",
+      jobId: event.jobId,
+      status: event.status,
+      ...(event.url === undefined ? {} : { url: event.url }),
+      ...(event.error === undefined ? {} : { error: event.error }),
+    },
+  ];
+};
 
 export const hydrateJobs = (
   items: ReadonlyArray<MediaThreadItem>,
