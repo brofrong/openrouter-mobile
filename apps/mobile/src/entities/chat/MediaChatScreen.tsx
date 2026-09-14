@@ -20,6 +20,7 @@ import { Pressable } from "react-native";
 import { Paragraph, ScrollView, Spinner, Text } from "tamagui";
 import { withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
+import { randomLocalId } from "../../shared/random-id";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
 import { KeyboardScreen } from "../../shared/ui/KeyboardScreen";
@@ -454,7 +455,7 @@ export function MediaChatScreen({
     if (prompt.length === 0) {
       return;
     }
-    const localId = crypto.randomUUID();
+    const localId = randomLocalId();
     setComposer("");
     setBusy(true);
     setError(undefined);

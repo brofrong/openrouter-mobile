@@ -22,6 +22,7 @@ import { ChatMenu, ChatMenuButton } from "../../entities/chat/ChatMenu";
 import { ChatRenameDialog } from "../../entities/chat/ChatRenameDialog";
 import { withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
+import { randomLocalId } from "../../shared/random-id";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
 import { KeyboardScreen } from "../../shared/ui/KeyboardScreen";
@@ -372,7 +373,7 @@ export function ImagesScreen() {
     if (prompt.length === 0 && attachments.length === 0) {
       return;
     }
-    const localId = crypto.randomUUID();
+    const localId = randomLocalId();
     const { options } = selected;
     const inputReferences = attachments;
     setComposer("");
