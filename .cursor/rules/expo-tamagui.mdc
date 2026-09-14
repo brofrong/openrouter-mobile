@@ -12,6 +12,8 @@ alwaysApply: false
 - Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
 - Effect HTTP: `expo/fetch` for FetchHttpClient
 - WebSocket: `binaryType = "arraybuffer"`
+- Native speech/audio playback: `expo-audio` + `AudioPlayer` (data URLs via `expo-file-system`)
+- Native video playback: `expo-video` + `VideoPlayer` (data URLs via `expo-file-system`)
 
 ## Do not
 - Nested `File` in RPC payloads (no HTTP upload route; `AudioGenerate` takes a text prompt)

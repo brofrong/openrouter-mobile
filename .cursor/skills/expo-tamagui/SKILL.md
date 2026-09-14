@@ -115,4 +115,53 @@ Socket.fromWebSocket(acquire) // sets binaryType = "arraybuffer"
 - HTTP RPC: POST `{BASE_URL}/rpc` (NDJSON), `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
 - Streams: WebSocket `{ws(s)://BASE_URL}/rpc/ws`. Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
 - `expo-secure-store` is native-only. Web auth storage is `localStorage`; the Expo plugin skips SecureStore on web and uses `credentials: "include"` for `/api/auth/*`.
-- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq}.ts`
+- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq,media-source,resolve-media-uri}.ts`
+
+## Native audio (`expo-audio@57.0.5`)
+
+Speech and Audio threads persist a result URL (`data:audio/…;base64,…` or `https://…`). Web uses an HTML `<audio controls>` element. Android/iOS cannot play those data URLs in a DOM node, so native uses `expo-audio` via `apps/mobile/src/shared/ui/AudioPlayer.tsx`.
+
+Data URLs are written to `Paths.cache/openrouter-audio/` with `expo-file-system@57.0.7` (`File.write(base64, { encoding: "base64" })`) and played from the `file://` URI. Remote `http(s)` / `file://` URLs are passed through.
+
+```ts
+import {
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+} from "expo-audio";
+import { Directory, File, Paths } from "expo-file-system";
+
+const player = useAudioPlayer({ uri }, { updateInterval: 200 });
+const status = useAudioPlayerStatus(player);
+await setAudioModeAsync({
+  playsInSilentMode: true,
+  interruptionMode: "doNotMix",
+});
+player.play();
+player.pause();
+await player.seekTo(seconds);
+```
+
+`app.json` plugin: `expo-audio` with `microphonePermission: false`, `recordAudioAndroid: false`, `enableBackgroundPlayback: false` (playback only). Rebuild the native binary after adding the plugin.
+
+## Native video (`expo-video@57.0.4`)
+
+Video threads persist `data:video/mp4;base64,…` (or a remote URL). Web uses HTML `<video controls>`. Native uses `apps/mobile/src/shared/ui/VideoPlayer.tsx`: resolve the URI the same way as audio (`openrouter-video` cache dir), then `useVideoPlayer` + `VideoView` with `nativeControls`. Do not autoplay.
+
+```ts
+import { useVideoPlayer, VideoView } from "expo-video";
+
+const player = useVideoPlayer({ uri }, (next) => {
+  next.loop = false;
+});
+
+<VideoView
+  player={player}
+  nativeControls
+  contentFit="contain"
+  fullscreenOptions={{ enable: true }}
+  style={{ height: 280, width: "100%" }}
+/>
+```
+
+`app.json` plugin: `expo-video` with `supportsBackgroundPlayback: false`, `supportsPictureInPicture: false`. Rebuild the native binary after adding the plugin.

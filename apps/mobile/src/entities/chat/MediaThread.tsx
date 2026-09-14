@@ -1,8 +1,10 @@
 import { createElement } from "react";
 import { Platform } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
+import { AudioPlayer } from "../../shared/ui/AudioPlayer";
 import { SelectableText } from "../../shared/ui/SelectableText";
 import { UserBubble } from "../../shared/ui/UserBubble";
+import { VideoPlayer } from "../../shared/ui/VideoPlayer";
 import type { MediaAssistantItem, MediaThreadItem } from "./media-thread";
 
 export type MediaResultKind = "video" | "audio";
@@ -76,21 +78,29 @@ function ResultMedia({
   readonly resultKind: MediaResultKind;
   readonly url: string;
 }) {
+  if (resultKind === "audio") {
+    if (Platform.OS === "web") {
+      return createElement("audio", {
+        controls: true,
+        src: url,
+        style: { marginTop: 8, width: "100%" },
+      });
+    }
+    return <AudioPlayer url={url} />;
+  }
+
   if (Platform.OS === "web") {
-    return createElement(resultKind === "video" ? "video" : "audio", {
+    return createElement("video", {
       controls: true,
       src: url,
-      style:
-        resultKind === "video"
-          ? {
-              borderRadius: 8,
-              marginTop: 8,
-              maxHeight: 280,
-              width: "100%",
-            }
-          : { marginTop: 8, width: "100%" },
+      style: {
+        borderRadius: 8,
+        marginTop: 8,
+        maxHeight: 280,
+        width: "100%",
+      },
     });
   }
 
-  return <SelectableText mt="$2">{url}</SelectableText>;
+  return <VideoPlayer url={url} />;
 }
