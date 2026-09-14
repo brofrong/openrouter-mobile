@@ -532,15 +532,15 @@ const runGeneration = (options: {
     }
     const message = yield* toMessage(assistantRow);
     const encoded = yield* encodeMessage(message);
+    yield* options.durable.append(options.chatId, "token", {
+      _tag: "done",
+      message: encoded,
+    });
     yield* options.db
       .update(chats)
       .set({ generating: false })
       .where(eq(chats.id, options.chatId))
       .pipe(Effect.asVoid);
-    yield* options.durable.append(options.chatId, "token", {
-      _tag: "done",
-      message: encoded,
-    });
   }).pipe(
     Effect.mapError(unexpected),
     Effect.catchTag("AppError", (error) =>

@@ -71,6 +71,18 @@ const untilTerminal = (
     Stream.runCollect,
   );
 
+const waitUntilIdle = (chatId: Parameters<typeof listMessages>[0]["chatId"]) =>
+  Effect.gen(function* () {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const page = yield* listMessages({ chatId });
+      if (!page.generating) {
+        return page;
+      }
+      yield* Effect.sleep("20 millis");
+    }
+    return yield* listMessages({ chatId });
+  });
+
 const textPart = (text: string) => ({ _tag: "text" as const, text }) as const;
 
 const emptyCatalogPage = new CatalogModelPage({
@@ -397,6 +409,7 @@ test("mid-stream ChatMessages exposes generating inProgress and later tokens fro
   expect(result.page.inProgress).toBeDefined();
   expect(result.page.inProgress?.length).toBeGreaterThan(0);
   expect(result.page.headSeq).toBeGreaterThanOrEqual(result.lastSeen.seq);
+  expect(result.later.length).toBeGreaterThan(0);
   expect(result.later.every((event) => event.seq > result.page.headSeq)).toBe(
     true,
   );
@@ -408,16 +421,18 @@ test("after generation ChatMessages has the assistant and is idle", async () => 
       const session = yield* insertUser("after-generation");
       const chat = yield* asUser(session, createChat());
       yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
-      yield* asUser(session, untilTerminal(chat.id));
-      return yield* asUser(session, listMessages({ chatId: chat.id }));
+      const events = yield* asUser(session, untilTerminal(chat.id));
+      const page = yield* asUser(session, waitUntilIdle(chat.id));
+      return { events, page };
     }),
   );
 
-  expect(result.messages.some((message) => message.role === "assistant")).toBe(
-    true,
-  );
-  expect(result.generating).toBe(false);
-  expect(result.inProgress).toBeUndefined();
+  expect(result.events.some((event) => event._tag === "done")).toBe(true);
+  expect(
+    result.page.messages.some((message) => message.role === "assistant"),
+  ).toBe(true);
+  expect(result.page.generating).toBe(false);
+  expect(result.page.inProgress).toBeUndefined();
 });
 
 test("second ChatSend while generating is VALIDATION", async () => {
@@ -437,6 +452,11 @@ test("second ChatSend while generating is VALIDATION", async () => {
   );
 
   expect(isCode(result, "VALIDATION")).toBe(true);
+  expect(
+    Result.isFailure(result) &&
+      result.failure instanceof AppError &&
+      result.failure.message,
+  ).toBe("Already generating");
 });
 
 test("ChatSubscribe(afterSeq=n) resumes from the ledger after disconnect", async () => {
@@ -541,16 +561,7 @@ test("ChatSubscribe emits an OPENROUTER error chunk when generation errors", asy
         session,
         sendMessage({ chatId: chat.id, content: "hi" }),
       );
-      const chunks = yield* asUser(
-        session,
-        subscribeTokens(chat.id, 0).pipe(
-          Stream.filter(
-            (event) => event._tag === "token" || event._tag === "error",
-          ),
-          Stream.take(2),
-          Stream.runCollect,
-        ),
-      );
+      const chunks = yield* asUser(session, untilTerminal(chat.id));
       const db = yield* AppDb;
       const events = yield* db.query.streamEvents.findMany({
         where: { streamId: chat.id },
@@ -561,17 +572,22 @@ test("ChatSubscribe emits an OPENROUTER error chunk when generation errors", asy
   );
 
   expect(result.userMessage.content).toBe("hi");
-  expect(result.chunks[0]?._tag).toBe("token");
+  const tokenOrError = result.chunks.filter(
+    (event) => event._tag === "token" || event._tag === "error",
+  );
+  expect(tokenOrError[0]?._tag).toBe("token");
   expect(
-    result.chunks[0]?._tag === "token" ? result.chunks[0].text : undefined,
+    tokenOrError[0]?._tag === "token" ? tokenOrError[0].text : undefined,
   ).toBe("Hel");
-  expect(result.chunks[1]?._tag).toBe("error");
+  expect(tokenOrError[1]?._tag).toBe("error");
   expect(
-    result.chunks[1]?._tag === "error" ? result.chunks[1].error : undefined,
+    tokenOrError[1]?._tag === "error" ? tokenOrError[1].error : undefined,
   ).toBe("upstream failed");
   expect(
-    result.chunks[1]?._tag === "error" ? result.chunks[1].code : undefined,
+    tokenOrError[1]?._tag === "error" ? tokenOrError[1].code : undefined,
   ).toBe("OPENROUTER");
+  expect(result.chunks.some((event) => event._tag === "error")).toBe(true);
+  expect(result.chunks.some((event) => event._tag === "done")).toBe(false);
   expect(
     result.events.some(
       (event) =>
@@ -696,6 +712,7 @@ test("first ChatSend names the chat from a summary and later sends do not", asyn
       const titleChunks = yield* Fiber.join(titles);
       const named = yield* asUser(session, listChats());
       yield* asUser(session, untilTerminal(chat.id));
+      yield* asUser(session, waitUntilIdle(chat.id));
       yield* asUser(
         session,
         sendMessage({ chatId: chat.id, content: "second" }),
