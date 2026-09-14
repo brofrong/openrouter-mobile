@@ -6,6 +6,7 @@ import {
   GenerationJob,
   type GenerationJobId,
   JobEvent,
+  Message,
 } from "@openrouter-mobile/domain";
 import { JobRpcs, MediaRpcs } from "@openrouter-mobile/rpc";
 import { eq } from "drizzle-orm";
@@ -58,8 +59,25 @@ const toJob = (row: typeof generationJobs.$inferSelect) =>
     status: row.status,
     prompt: row.prompt,
     createdAt: DateTime.fromDateUnsafe(row.createdAt),
+    ...(row.chatId !== null ? { chatId: row.chatId } : {}),
     ...(row.resultUrl !== null ? { resultUrl: row.resultUrl } : {}),
     ...(row.error !== null ? { error: row.error } : {}),
+  }).pipe(Effect.mapError(unexpected));
+
+const MessageJson = Schema.toCodecJson(Message);
+
+const encodeMessage = (message: Message) =>
+  Schema.encodeUnknownEffect(MessageJson)(message).pipe(
+    Effect.mapError(unexpected),
+  );
+
+const toMessage = (row: typeof messages.$inferSelect) =>
+  Schema.decodeUnknownEffect(Message)({
+    id: row.id,
+    chatId: row.chatId,
+    role: row.role,
+    content: row.content,
+    createdAt: DateTime.fromDateUnsafe(row.createdAt),
   }).pipe(Effect.mapError(unexpected));
 
 const toJobEvent = (seq: number, payload: unknown) =>
@@ -96,10 +114,24 @@ const appendJobEvent = (
   durable: DurableStreamService,
   jobId: string,
   payload: JobEventPayload,
+  chatId?: string,
 ) =>
-  durable
-    .append(jobId, "job", payload)
-    .pipe(Effect.mapError(unexpected), Effect.asVoid);
+  Effect.gen(function* () {
+    yield* durable
+      .append(jobId, "job", payload)
+      .pipe(Effect.mapError(unexpected));
+    if (chatId !== undefined) {
+      yield* durable
+        .append(chatId, "token", {
+          _tag: "job" as const,
+          jobId,
+          status: payload.status,
+          ...(payload.url === undefined ? {} : { url: payload.url }),
+          ...(payload.error === undefined ? {} : { error: payload.error }),
+        })
+        .pipe(Effect.mapError(unexpected));
+    }
+  }).pipe(Effect.asVoid);
 
 const errorFromCause = (cause: Cause.Cause<unknown>): AppError => {
   const squashed = Cause.squash(cause);
@@ -120,6 +152,7 @@ const persistFailure = (options: {
   readonly error: AppError;
   readonly db: Effect.Success<typeof AppDb>;
   readonly durable: DurableStreamService;
+  readonly chatId?: string;
 }) =>
   Effect.gen(function* () {
     const row = yield* options.db.query.generationJobs
@@ -140,10 +173,17 @@ const persistFailure = (options: {
         .where(eq(generationJobs.id, options.jobId))
         .pipe(Effect.mapError(unexpected), Effect.asVoid);
     }
-    yield* appendJobEvent(options.durable, options.jobId, {
-      status: "failed",
-      error: options.error.message,
-    });
+    const chatId =
+      options.chatId ?? (row.chatId === null ? undefined : row.chatId);
+    yield* appendJobEvent(
+      options.durable,
+      options.jobId,
+      {
+        status: "failed",
+        error: options.error.message,
+      },
+      chatId,
+    );
   }).pipe(Effect.asVoid);
 
 const zeroUsage: OpenRouterUsage = {
@@ -183,6 +223,7 @@ const runGeneration = (options: {
       error,
       db: options.db,
       durable: options.durable,
+      ...(options.chatId === undefined ? {} : { chatId: options.chatId }),
     });
 
   return Effect.gen(function* () {
@@ -191,9 +232,14 @@ const runGeneration = (options: {
       .set({ status: "running" })
       .where(eq(generationJobs.id, options.jobId))
       .pipe(Effect.mapError(unexpected), Effect.asVoid);
-    yield* appendJobEvent(options.durable, options.jobId, {
-      status: "running",
-    });
+    yield* appendJobEvent(
+      options.durable,
+      options.jobId,
+      {
+        status: "running",
+      },
+      options.chatId,
+    );
 
     const result = yield* options.media
       .generate({
@@ -259,10 +305,15 @@ const runGeneration = (options: {
         })
         .pipe(Effect.mapError(unexpected), Effect.asVoid);
     }
-    yield* appendJobEvent(options.durable, options.jobId, {
-      status: "completed",
-      url: result.url,
-    });
+    yield* appendJobEvent(
+      options.durable,
+      options.jobId,
+      {
+        status: "completed",
+        url: result.url,
+      },
+      options.chatId,
+    );
   }).pipe(
     Effect.catchCause((cause) =>
       fail(errorFromCause(cause)).pipe(Effect.catchCause(() => Effect.void)),
@@ -298,6 +349,7 @@ const startJob = (options: {
         kind: options.kind,
         status: "queued",
         prompt: options.prompt,
+        ...(options.chatId === undefined ? {} : { chatId: options.chatId }),
       })
       .returning()
       .pipe(Effect.mapError(unexpected));
@@ -306,7 +358,12 @@ const startJob = (options: {
       return yield* unexpected(new Error("Job insert returned no row"));
     }
 
-    yield* appendJobEvent(durable, row.id, { status: "queued" });
+    yield* appendJobEvent(
+      durable,
+      row.id,
+      { status: "queued" },
+      options.chatId,
+    );
 
     yield* Effect.forkDetach(
       runGeneration({
@@ -401,7 +458,7 @@ const generateInChat = (options: {
         where: { chatId: chat.id },
       })
       .pipe(Effect.mapError(unexpected));
-    yield* db
+    const inserted = yield* db
       .insert(messages)
       .values({
         chatId: chat.id,
@@ -411,6 +468,16 @@ const generateInChat = (options: {
           options.inputReferences ?? [],
         ),
       })
+      .returning()
+      .pipe(Effect.mapError(unexpected));
+    const userRow = inserted[0];
+    if (userRow === undefined) {
+      return yield* unexpected(new Error("Message insert returned no row"));
+    }
+    const userMessage = yield* toMessage(userRow);
+    const encoded = yield* encodeMessage(userMessage);
+    yield* durable
+      .append(chat.id, "token", { _tag: "user", message: encoded })
       .pipe(Effect.mapError(unexpected), Effect.asVoid);
 
     if (history.length === 0 && !chat.titleLocked) {

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   chats,
+  generationJobs,
   messages,
   streamEvents,
   usageEvents,
@@ -185,6 +186,17 @@ const insertUser = (label: string) =>
     yield* Effect.addFinalizer(() =>
       Effect.ignore(
         Effect.gen(function* () {
+          const ownedJobs = yield* db.query.generationJobs.findMany({
+            where: { userId },
+          });
+          for (const job of ownedJobs) {
+            yield* db
+              .delete(streamEvents)
+              .where(eq(streamEvents.streamId, job.id));
+          }
+          yield* db
+            .delete(generationJobs)
+            .where(eq(generationJobs.userId, userId));
           const owned = yield* db.query.chats.findMany({
             where: { userId },
           });

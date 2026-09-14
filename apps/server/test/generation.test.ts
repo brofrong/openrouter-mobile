@@ -7,10 +7,18 @@ import {
   usageEvents,
   user,
 } from "@openrouter-mobile/db";
-import { AppError, type GenerationJobId } from "@openrouter-mobile/domain";
+import {
+  AppError,
+  type ChatStreamEvent,
+  type GenerationJobId,
+} from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
 import { Effect, Layer, Result, type Scope, Stream } from "effect";
-import { createChat } from "../src/features/chat/ChatLive";
+import {
+  createChat,
+  listMessages,
+  subscribeTokens,
+} from "../src/features/chat/ChatLive";
 import type { DurableStream } from "../src/features/durable-stream/DurableStream";
 import { DurableStreamLive } from "../src/features/durable-stream/DurableStreamLive";
 import {
@@ -136,6 +144,17 @@ const insertUser = (label: string) =>
     yield* Effect.addFinalizer(() =>
       Effect.ignore(
         Effect.gen(function* () {
+          const ownedJobs = yield* db.query.generationJobs.findMany({
+            where: { userId },
+          });
+          for (const job of ownedJobs) {
+            yield* db
+              .delete(streamEvents)
+              .where(eq(streamEvents.streamId, job.id));
+          }
+          yield* db
+            .delete(generationJobs)
+            .where(eq(generationJobs.userId, userId));
           const ownedChats = yield* db.query.chats.findMany({
             where: { userId },
           });
@@ -146,17 +165,6 @@ const insertUser = (label: string) =>
               .where(eq(streamEvents.streamId, chat.id));
           }
           yield* db.delete(chats).where(eq(chats.userId, userId));
-          const owned = yield* db.query.generationJobs.findMany({
-            where: { userId },
-          });
-          for (const job of owned) {
-            yield* db
-              .delete(streamEvents)
-              .where(eq(streamEvents.streamId, job.id));
-          }
-          yield* db
-            .delete(generationJobs)
-            .where(eq(generationJobs.userId, userId));
           yield* db.delete(usageEvents).where(eq(usageEvents.userId, userId));
           yield* db.delete(user).where(eq(user.id, userId));
         }),
@@ -681,6 +689,54 @@ test("JobSubscribe receives failed when media.generate dies", async () => {
   expect(result.events[2]?.error).toBe("media fiber died");
   expect(result.stored.status).toBe("failed");
   expect(result.stored.error).toBe("media fiber died");
+});
+
+test("ImageGenerate ChatMessages includes the running job and ChatSubscribe emits job events", async () => {
+  const result = await run(
+    Effect.gen(function* () {
+      const session = yield* insertUser("image-chat-bus");
+      const { chat, job } = yield* startImage(session, { prompt: "a canyon" });
+      const db = yield* AppDb;
+      const row = yield* db.query.generationJobs.findFirst({
+        where: { id: job.id },
+      });
+      const during = yield* asUser(session, listMessages({ chatId: chat.id }));
+      const jobEvents = yield* asUser(
+        session,
+        subscribeTokens(chat.id, 0).pipe(
+          Stream.filter(
+            (event): event is Extract<ChatStreamEvent, { _tag: "job" }> =>
+              event._tag === "job",
+          ),
+          Stream.takeUntil(
+            (event) =>
+              event.status === "completed" || event.status === "failed",
+          ),
+          Stream.timeout("2 seconds"),
+          Stream.runCollect,
+        ),
+      );
+      const after = yield* asUser(session, listMessages({ chatId: chat.id }));
+      return { chat, job, row, during, jobEvents, after };
+    }),
+  );
+
+  expect(result.row?.chatId).toBe(result.chat.id);
+  expect(result.job.chatId).toBe(result.chat.id);
+  expect(result.during.jobs[0]?.id).toBe(result.job.id);
+  expect(result.during.generating).toBe(true);
+  expect(result.jobEvents.map((event) => event.status)).toEqual([
+    "queued",
+    "running",
+    "completed",
+  ]);
+  expect(result.after.jobs).toEqual([]);
+  expect(
+    result.after.messages.some(
+      (message) =>
+        message.role === "assistant" && message.content.includes(result.job.id),
+    ),
+  ).toBe(true);
 });
 
 test("ImageGenerate persists the prompt and completed image as chat messages", async () => {

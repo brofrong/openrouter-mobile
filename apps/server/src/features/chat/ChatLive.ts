@@ -13,6 +13,7 @@ import {
   ChatUserEvent,
   decodeStoredContent,
   encodeStoredContent,
+  GenerationJob,
   Message,
   type MessageId,
   type OutputModality,
@@ -104,6 +105,14 @@ const isDoneOrErrorPayload = (payload: unknown): boolean => {
   return typeof record?.error === "string" && record.error.length > 0;
 };
 
+const isTerminalJobPayload = (payload: unknown): boolean => {
+  if (payloadTag(payload) !== "job") {
+    return false;
+  }
+  const record = asRecord(payload);
+  return record?.status === "completed" || record?.status === "failed";
+};
+
 const isTitlePayload = (payload: unknown): boolean => {
   const tag = payloadTag(payload);
   if (tag === "title") {
@@ -142,7 +151,10 @@ export const pageIsGenerating = (options: {
     if (isTitlePayload(row.payload)) {
       continue;
     }
-    if (isDoneOrErrorPayload(row.payload)) {
+    if (
+      isDoneOrErrorPayload(row.payload) ||
+      isTerminalJobPayload(row.payload)
+    ) {
       terminalAtEnd = true;
       break;
     }
@@ -321,6 +333,29 @@ const toMessage = (row: typeof messages.$inferSelect) =>
     createdAt: DateTime.fromDateUnsafe(row.createdAt),
   }).pipe(Effect.mapError(unexpected));
 
+const toJob = (row: {
+  readonly id: string;
+  readonly userId: string;
+  readonly chatId: string | null;
+  readonly kind: string;
+  readonly status: string;
+  readonly prompt: string;
+  readonly resultUrl: string | null;
+  readonly error: string | null;
+  readonly createdAt: Date;
+}) =>
+  Schema.decodeUnknownEffect(GenerationJob)({
+    id: row.id,
+    userId: row.userId,
+    kind: row.kind,
+    status: row.status,
+    prompt: row.prompt,
+    createdAt: DateTime.fromDateUnsafe(row.createdAt),
+    ...(row.chatId !== null ? { chatId: row.chatId } : {}),
+    ...(row.resultUrl !== null ? { resultUrl: row.resultUrl } : {}),
+    ...(row.error !== null ? { error: row.error } : {}),
+  }).pipe(Effect.mapError(unexpected));
+
 const toOpenRouterRole = (
   role: string,
 ): OpenRouterMessage["role"] | undefined =>
@@ -436,7 +471,16 @@ export const listMessages = (payload: {
       })
       .pipe(Effect.mapError(unexpected));
     const inProgress = inProgressText(streamRows);
-    const jobs: ChatMessagePage["jobs"] = [];
+    const jobRows = yield* db.query.generationJobs
+      .findMany({
+        where: {
+          chatId: payload.chatId,
+          status: { in: ["queued", "running"] },
+        },
+        orderBy: { createdAt: "asc" },
+      })
+      .pipe(Effect.mapError(unexpected));
+    const jobs = yield* Effect.all(jobRows.map(toJob));
     const streamPage = {
       headSeq: streamRows[0]?.seq ?? 0,
       generating: pageIsGenerating({
