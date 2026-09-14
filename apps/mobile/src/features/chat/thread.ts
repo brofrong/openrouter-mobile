@@ -91,6 +91,7 @@ export const applyChatStreamEvent = (
             ...withoutError(state),
             messages: [...state.messages, toThreadItem(event.message)],
             draft: "",
+            generating: true,
           };
     case "token":
       if (ignoreTokenAfterDone(state)) {

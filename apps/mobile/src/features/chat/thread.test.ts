@@ -195,3 +195,13 @@ test("applyChatStreamEvent clears draft on error and error on the next user turn
   expect(state.draft).toBe("lo");
   expect(state.error).toBeUndefined();
 });
+
+test("applyChatStreamEvent sets generating on a new user and ignores a duplicate after done", () => {
+  let state = applyChatStreamEvent(emptyThread(), userEvent);
+  expect(state.generating).toBe(true);
+  expect(state.draft).toBe("");
+  state = applyChatStreamEvent(state, doneEvent);
+  expect(state.generating).toBe(false);
+  state = applyChatStreamEvent(state, userEvent);
+  expect(state.generating).toBe(false);
+});
