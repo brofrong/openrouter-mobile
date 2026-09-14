@@ -6,8 +6,8 @@ export const appRelations = defineRelations(schema, (r) => ({
   chats: {
     messages: r.many.messages(),
     jobs: r.many.generationJobs({
-      from: r.generationJobs.chatId,
-      to: r.chats.id,
+      from: r.chats.id,
+      to: r.generationJobs.chatId,
     }),
     user: r.one.user({
       from: r.chats.userId,
