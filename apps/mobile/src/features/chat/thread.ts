@@ -71,6 +71,14 @@ const hasMessageId = (
 const ignoreTokenAfterDone = (state: ChatThreadState): boolean =>
   !state.generating && state.messages.at(-1)?.role === "assistant";
 
+const withoutError = (
+  state: ChatThreadState,
+): Omit<ChatThreadState, "error"> => ({
+  messages: state.messages,
+  draft: state.draft,
+  generating: state.generating,
+});
+
 export const applyChatStreamEvent = (
   state: ChatThreadState,
   event: ChatStreamEvent,
@@ -80,21 +88,22 @@ export const applyChatStreamEvent = (
       return hasMessageId(state.messages, event.message.id)
         ? state
         : {
-            ...state,
+            ...withoutError(state),
             messages: [...state.messages, toThreadItem(event.message)],
+            draft: "",
           };
     case "token":
       if (ignoreTokenAfterDone(state)) {
         return state;
       }
       return {
-        ...state,
+        ...withoutError(state),
         draft: `${state.draft}${event.text}`,
         generating: true,
       };
     case "done":
       return {
-        ...state,
+        ...withoutError(state),
         messages: hasMessageId(state.messages, event.message.id)
           ? state.messages
           : [...state.messages, toThreadItem(event.message)],
@@ -104,6 +113,7 @@ export const applyChatStreamEvent = (
     case "error":
       return {
         ...state,
+        draft: "",
         generating: false,
         error: event.error,
       };

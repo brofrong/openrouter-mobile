@@ -162,3 +162,36 @@ test("applyChatStreamEvent records error and ignores title and job", () => {
   );
   expect(afterJob).toEqual(state);
 });
+
+test("applyChatStreamEvent clears draft on error and error on the next user turn", () => {
+  const nextUser = new ChatUserEvent({
+    _tag: "user",
+    seq: 4,
+    message: new Message({
+      id: "user-2" as MessageId,
+      chatId,
+      role: "user",
+      content: "again",
+      createdAt,
+    }),
+  });
+  let state = emptyThread();
+  state = applyChatStreamEvent(state, userEvent);
+  state = applyChatStreamEvent(state, tokenEvent("Hel"));
+  state = applyChatStreamEvent(
+    state,
+    new ChatErrorEvent({
+      _tag: "error",
+      seq: 3,
+      error: "OPENROUTER: no key",
+      code: "OPENROUTER",
+    }),
+  );
+  expect(state.draft).toBe("");
+  expect(state.error).toBe("OPENROUTER: no key");
+  state = applyChatStreamEvent(state, nextUser);
+  expect(state.error).toBeUndefined();
+  state = applyChatStreamEvent(state, tokenEvent("lo", 5));
+  expect(state.draft).toBe("lo");
+  expect(state.error).toBeUndefined();
+});
