@@ -51,6 +51,33 @@ test("setAfterSeq persists the last seq and omits it until the first chunk", asy
   expect(getAfterSeq("chat-1")).toBe(3);
 });
 
+test("seeding headSeq after hydrate wins over a lower stored cursor", async () => {
+  resetAfterSeq();
+  const data = new Map<string, string>();
+  configureAfterSeqStorage({
+    getItem: (key) => Promise.resolve(data.get(key) ?? null),
+    setItem: (key, value) => {
+      data.set(key, value);
+      return Promise.resolve();
+    },
+  });
+
+  setAfterSeq("chat-1", 2);
+  resetAfterSeq();
+  configureAfterSeqStorage({
+    getItem: (key) => Promise.resolve(data.get(key) ?? null),
+    setItem: (key, value) => {
+      data.set(key, value);
+      return Promise.resolve();
+    },
+  });
+  await hydrateAfterSeq("chat-1");
+  expect(getAfterSeq("chat-1")).toBe(2);
+
+  setAfterSeq("chat-1", 9);
+  expect(getAfterSeq("chat-1")).toBe(9);
+});
+
 test("setAfterSeq keeps memory even if storage write rejects", () => {
   resetAfterSeq();
   configureAfterSeqStorage({
