@@ -104,6 +104,65 @@ const isDoneOrErrorPayload = (payload: unknown): boolean => {
   return typeof record?.error === "string" && record.error.length > 0;
 };
 
+const isTitlePayload = (payload: unknown): boolean => {
+  const tag = payloadTag(payload);
+  if (tag === "title") {
+    return true;
+  }
+  if (tag !== undefined) {
+    return false;
+  }
+  const record = asRecord(payload);
+  return typeof record?.title === "string" && record.title.length > 0;
+};
+
+const isOpenTurnPayload = (payload: unknown): boolean => {
+  const tag = payloadTag(payload);
+  if (tag === "user" || tag === "token" || tag === "job") {
+    return true;
+  }
+  if (tag !== undefined) {
+    return false;
+  }
+  const record = asRecord(payload);
+  if (typeof record?.error === "string" && record.error.length > 0) {
+    return false;
+  }
+  return typeof record?.text === "string";
+};
+
+export const pageIsGenerating = (options: {
+  readonly chatGenerating: boolean;
+  readonly hasJobs: boolean;
+  readonly eventsDesc: ReadonlyArray<{ readonly payload: unknown }>;
+}): boolean => {
+  let openTurn = false;
+  let terminalAtEnd = false;
+  for (const row of options.eventsDesc) {
+    if (isTitlePayload(row.payload)) {
+      continue;
+    }
+    if (isDoneOrErrorPayload(row.payload)) {
+      terminalAtEnd = true;
+      break;
+    }
+    if (isOpenTurnPayload(row.payload)) {
+      openTurn = true;
+      break;
+    }
+  }
+  return (
+    options.hasJobs || openTurn || (options.chatGenerating && !terminalAtEnd)
+  );
+};
+
+const unlockChat = (db: Effect.Success<typeof AppDb>, chatId: string) =>
+  db
+    .update(chats)
+    .set({ generating: false })
+    .where(eq(chats.id, chatId))
+    .pipe(Effect.asVoid, Effect.ignore);
+
 const inProgressText = (
   rowsDesc: ReadonlyArray<{ readonly payload: unknown }>,
 ): string => {
@@ -380,7 +439,11 @@ export const listMessages = (payload: {
     const jobs: ChatMessagePage["jobs"] = [];
     const streamPage = {
       headSeq: streamRows[0]?.seq ?? 0,
-      generating: chat.generating || jobs.length > 0,
+      generating: pageIsGenerating({
+        chatGenerating: chat.generating,
+        hasJobs: jobs.length > 0,
+        eventsDesc: streamRows,
+      }),
       jobs,
       ...(inProgress.length > 0 ? { inProgress } : {}),
     };
@@ -536,11 +599,6 @@ const runGeneration = (options: {
       _tag: "done",
       message: encoded,
     });
-    yield* options.db
-      .update(chats)
-      .set({ generating: false })
-      .where(eq(chats.id, options.chatId))
-      .pipe(Effect.asVoid);
   }).pipe(
     Effect.mapError(unexpected),
     Effect.catchTag("AppError", (error) =>
@@ -666,42 +724,48 @@ export const sendMessage = (payload: {
       });
     }
 
-    const history = yield* db.query.messages
-      .findMany({
-        where: { chatId: chat.id },
-        orderBy: { createdAt: "asc" },
-      })
-      .pipe(Effect.mapError(unexpected));
+    const prepared = yield* Effect.gen(function* () {
+      const history = yield* db.query.messages
+        .findMany({
+          where: { chatId: chat.id },
+          orderBy: { createdAt: "asc" },
+        })
+        .pipe(Effect.mapError(unexpected));
 
-    const outgoing: Array<OpenRouterMessage> = [];
-    for (const row of history) {
-      const role = toOpenRouterRole(row.role);
-      if (role !== undefined) {
-        outgoing.push({ role, content: toOpenRouterUserContent(row.content) });
+      const outgoing: Array<OpenRouterMessage> = [];
+      for (const row of history) {
+        const role = toOpenRouterRole(row.role);
+        if (role !== undefined) {
+          outgoing.push({
+            role,
+            content: toOpenRouterUserContent(row.content),
+          });
+        }
       }
-    }
-    outgoing.push({ role: "user", content: toOpenRouterUserContent(stored) });
+      outgoing.push({ role: "user", content: toOpenRouterUserContent(stored) });
 
-    const inserted = yield* db
-      .insert(messages)
-      .values({
-        chatId: chat.id,
-        role: "user",
-        content: stored,
-      })
-      .returning()
-      .pipe(Effect.mapError(unexpected));
-    const userRow = inserted[0];
-    if (userRow === undefined) {
-      return yield* unexpected(new Error("Message insert returned no row"));
-    }
-    const userMessage = yield* toMessage(userRow);
-    const encoded = yield* encodeMessage(userMessage);
-    yield* durable
-      .append(chat.id, "token", { _tag: "user", message: encoded })
-      .pipe(Effect.mapError(unexpected), Effect.asVoid);
+      const inserted = yield* db
+        .insert(messages)
+        .values({
+          chatId: chat.id,
+          role: "user",
+          content: stored,
+        })
+        .returning()
+        .pipe(Effect.mapError(unexpected));
+      const userRow = inserted[0];
+      if (userRow === undefined) {
+        return yield* unexpected(new Error("Message insert returned no row"));
+      }
+      const userMessage = yield* toMessage(userRow);
+      const encoded = yield* encodeMessage(userMessage);
+      yield* durable
+        .append(chat.id, "token", { _tag: "user", message: encoded })
+        .pipe(Effect.mapError(unexpected), Effect.asVoid);
+      return { userMessage, outgoing, firstMessage: history.length === 0 };
+    }).pipe(Effect.tapError(() => unlockChat(db, chat.id)));
 
-    if (history.length === 0) {
+    if (prepared.firstMessage) {
       yield* Effect.forkDetach(
         maybeTitleFromFirstMessage({
           chatId: chat.id,
@@ -720,24 +784,16 @@ export const sendMessage = (payload: {
       runGeneration({
         chatId: chat.id,
         userId: chat.userId,
-        outgoing,
+        outgoing: prepared.outgoing,
         openrouter,
         durable,
         db,
         ...(payload.model === undefined ? {} : { model: payload.model }),
         ...(payload.effort === undefined ? {} : { effort: payload.effort }),
-      }).pipe(
-        Effect.ensuring(
-          db
-            .update(chats)
-            .set({ generating: false })
-            .where(eq(chats.id, chat.id))
-            .pipe(Effect.asVoid, Effect.ignore),
-        ),
-      ),
+      }).pipe(Effect.ensuring(unlockChat(db, chat.id))),
     );
 
-    return userMessage;
+    return prepared.userMessage;
   });
 
 export const listModels = (payload: {

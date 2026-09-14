@@ -11,14 +11,24 @@ import {
   CatalogModelPage,
   type ChatStreamEvent,
   type MessageId,
+  StreamEvent,
 } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
-import { Effect, Fiber, Layer, Result, type Scope, Stream } from "effect";
+import {
+  Effect,
+  Fiber,
+  Layer,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import {
   createChat,
   listChats,
   listMessages,
   listModels,
+  pageIsGenerating,
   renameChat,
   sendMessage,
   setChatModel,
@@ -73,14 +83,16 @@ const untilTerminal = (
 
 const waitUntilIdle = (chatId: Parameters<typeof listMessages>[0]["chatId"]) =>
   Effect.gen(function* () {
+    const db = yield* AppDb;
     for (let attempt = 0; attempt < 50; attempt++) {
-      const page = yield* listMessages({ chatId });
-      if (!page.generating) {
-        return page;
+      const row = yield* db.query.chats.findFirst({
+        where: { id: chatId },
+      });
+      if (row !== undefined && row !== null && !row.generating) {
+        return;
       }
       yield* Effect.sleep("20 millis");
     }
-    return yield* listMessages({ chatId });
   });
 
 const textPart = (text: string) => ({ _tag: "text" as const, text }) as const;
@@ -415,6 +427,41 @@ test("mid-stream ChatMessages exposes generating inProgress and later tokens fro
   );
 });
 
+test("pageIsGenerating follows the open turn on the stream, not only chats.generating", () => {
+  expect(
+    pageIsGenerating({
+      chatGenerating: true,
+      hasJobs: false,
+      eventsDesc: [
+        { payload: { _tag: "title", title: "Hello from mock" } },
+        { payload: { _tag: "done", message: {} } },
+        { payload: { _tag: "token", text: "mock" } },
+      ],
+    }),
+  ).toBe(false);
+  expect(
+    pageIsGenerating({
+      chatGenerating: false,
+      hasJobs: false,
+      eventsDesc: [{ payload: { _tag: "token", text: "Hel" } }],
+    }),
+  ).toBe(true);
+  expect(
+    pageIsGenerating({
+      chatGenerating: true,
+      hasJobs: false,
+      eventsDesc: [],
+    }),
+  ).toBe(true);
+  expect(
+    pageIsGenerating({
+      chatGenerating: true,
+      hasJobs: false,
+      eventsDesc: [{ payload: { error: "upstream failed" } }],
+    }),
+  ).toBe(false);
+});
+
 test("after generation ChatMessages has the assistant and is idle", async () => {
   const result = await run(
     Effect.gen(function* () {
@@ -422,7 +469,7 @@ test("after generation ChatMessages has the assistant and is idle", async () => 
       const chat = yield* asUser(session, createChat());
       yield* asUser(session, sendMessage({ chatId: chat.id, content: "hi" }));
       const events = yield* asUser(session, untilTerminal(chat.id));
-      const page = yield* asUser(session, waitUntilIdle(chat.id));
+      const page = yield* asUser(session, listMessages({ chatId: chat.id }));
       return { events, page };
     }),
   );
@@ -457,6 +504,39 @@ test("second ChatSend while generating is VALIDATION", async () => {
       result.failure instanceof AppError &&
       result.failure.message,
   ).toBe("Already generating");
+});
+
+test("ChatSend unlocks generating if the user event cannot be appended", async () => {
+  const FailAppendLive = Layer.succeed(DurableStream, {
+    append: () => Schema.decodeUnknownEffect(StreamEvent)({}),
+    subscribe: () => Stream.empty,
+    runInto: () => Stream.empty,
+  });
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const session = yield* insertUser("cas-unlock");
+      const chat = yield* asUser(session, createChat());
+      const sendResult = yield* asUser(
+        session,
+        sendMessage({ chatId: chat.id, content: "hi" }),
+      ).pipe(Effect.result);
+      const db = yield* AppDb;
+      const row = yield* db.query.chats.findFirst({
+        where: { id: chat.id },
+      });
+      return { sendResult, generating: row?.generating };
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(FailAppendLive, OpenRouterMockLive).pipe(
+          Layer.provideMerge(DbLive),
+        ),
+      ),
+    ),
+  );
+
+  expect(isCode(result.sendResult, "STREAM_GONE")).toBe(true);
+  expect(result.generating).toBe(false);
 });
 
 test("ChatSubscribe(afterSeq=n) resumes from the ledger after disconnect", async () => {
