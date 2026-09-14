@@ -1,6 +1,7 @@
 import { expoClient } from "@better-auth/expo/client";
 import { createAuthClient } from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
+import "expo-web-browser";
 import { Platform } from "react-native";
 import { authUrl } from "./env";
 

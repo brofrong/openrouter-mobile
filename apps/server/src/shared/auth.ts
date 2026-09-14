@@ -89,7 +89,6 @@ export const createAuth = (
                 tokenUrl: options.oidc.tokenUrl,
                 userInfoUrl: options.oidc.userInfoUrl,
                 scopes: [...options.oidc.scopes],
-                disableSignUp: disableSignup,
               },
             ]
           : [],

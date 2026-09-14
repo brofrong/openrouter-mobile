@@ -24,4 +24,4 @@ Read before writing code.
 - Reconnect protocol: subscribe live → replay DB `seq > afterSeq` → tail live, dedup by seq
 - Effect Schema only (no Zod)
 - Auth is Better Auth only (no NextAuth, Clerk, custom JWT). RPC requires a session cookie (except `Health`).
-- Default auth: email/password. Optional OIDC SSO via `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` (then OIDC is the only sign-in). `AUTH_DISABLE_SIGNUP` disables registration. Do not require email verification; do not add extra OAuth providers, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.
+- Default auth: email/password. Optional OIDC SSO via `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` (then OIDC is the only sign-in). `AUTH_DISABLE_SIGNUP` disables email/password registration; OIDC SSO can always create a user on first login. Do not require email verification; do not add extra OAuth providers, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.

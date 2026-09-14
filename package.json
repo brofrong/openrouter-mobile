@@ -2,6 +2,7 @@
   "name": "openrouter-mobile",
   "private": true,
   "version": "0.2.1",
+  "license": "MIT",
   "packageManager": "bun@1.4.2",
   "scripts": {
     "build": "turbo run build",

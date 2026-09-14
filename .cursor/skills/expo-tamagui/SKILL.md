@@ -10,6 +10,7 @@ Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@
 ## Do
 - Expo SDK 57, Expo Router tabs under `apps/mobile/src/app/(tabs)/`
 - Scheme: `openrouter-mobile` (Better Auth deep links)
+- `expo-web-browser` for native SSO (`@better-auth/expo` opens the OIDC session with it)
 - Tamagui: `createTamagui` from `tamagui`, `defaultConfig` from `@tamagui/config/v5`
 - Effect HTTP: `expo/fetch` for FetchHttpClient (`apps/mobile/src/shared/http.ts`)
 - WebSocket: `binaryType = "arraybuffer"` (`apps/mobile/src/shared/ws.ts`)

@@ -34,7 +34,7 @@ export const createAuth = (secret: string, baseUrl: string) =>
       schema: { user, session, account, verification },
     }),
     emailAndPassword: { enabled: !oidcEnabled, disableSignUp }, // do NOT set requireEmailVerification
-    plugins: [expo(), genericOAuth({ config: oidc ? [{ providerId: "oidc", authorizationUrl, tokenUrl, userInfoUrl, clientId, clientSecret, disableSignUp }] : [] })],
+    plugins: [expo(), genericOAuth({ config: oidc ? [{ providerId: "oidc", authorizationUrl, tokenUrl, userInfoUrl, clientId, clientSecret }] : [] })],
     trustedOrigins: makeTrustedOrigins(baseUrl),
   })
 
@@ -59,7 +59,7 @@ export const AuthLive = Layer.effect(
 - Server plugin: `expo()` from `@better-auth/expo`.
 - Classic Drizzle client only: `createAuthDb` in `packages/db/src/client.ts` uses `drizzle-orm/postgres-js` + `postgres`. Effect `PgDrizzle` is not accepted by the adapter. `drizzle-orm/bun-sql` fails under `bun x auth generate` (CLI loads config with Node/jiti; `bun` is not resolvable).
 - Mount `auth.handler` on the same Effect `HttpRouter` as RPC in `apps/server/src/shared/AuthHttp.ts` (`Layer.unwrap` + `yield* Auth`, then `HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
-- Email/password enabled unless `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` are set (then OIDC via `genericOAuth` is the only sign-in). Endpoints are derived from the issuer (`/authorize`, `/api/oidc/token`, `/api/oidc/userinfo`) so Better Auth does **not** fetch OIDC discovery at boot — that hang blocks the whole HTTP server when SSO is behind VPN. `AUTH_DISABLE_SIGNUP` sets `disableSignUp` on email/password and OIDC. Do not require email verification.
+- Email/password enabled unless `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` are set (then OIDC via `genericOAuth` is the only sign-in). Endpoints are derived from the issuer (`/authorize`, `/api/oidc/token`, `/api/oidc/userinfo`) so Better Auth does **not** fetch OIDC discovery at boot — that hang blocks the whole HTTP server when SSO is behind VPN. `AUTH_DISABLE_SIGNUP` sets `disableSignUp` on email/password only; first-time OIDC SSO always creates an account. Do not require email verification.
 - Better Auth `secret` is generated on first boot into Postgres `kv` (key `better_auth_secret`). Public origin is `BASE_URL` (Better Auth `baseURL`). Optional leftover `BETTER_AUTH_SECRET` is copied into `kv` once if the row is missing. `BETTER_AUTH_URL` is still accepted as a fallback.
 
 ## Schema + relations
@@ -182,6 +182,7 @@ export const authClient = createAuthClient({
 ```
 
 - `expo-secure-store@57` has no web implementation. Pass a `localStorage` adapter (`getItem` / `setItem` / `getItemAsync` / `setItemAsync`) on web.
+- Native SSO requires `expo-web-browser` (`@better-auth/expo` dynamically imports it for `openAuthSessionAsync`). Missing it crashes the app with `Requiring unknown module "expo-web-browser"`.
 - On web the Expo plugin does **not** persist `Set-Cookie` into storage; it leaves `credentials` alone so the browser cookie jar is used. RPC HTTP therefore uses `credentials: "include"` on web and `omit` on native.
 - RPC: `headers: { Cookie: await authClient.getCookie() }` via `HttpClientRequest.setHeader(..., "cookie", cookie)`, native fetch `credentials: "omit"`.
 - Cookie header format from sign-in `Set-Cookie`: `Cookie: better-auth.session_token=<token>.<url-encoded-hmac>`

@@ -11,9 +11,9 @@ alwaysApply: false
 - Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2`, provider `"pg"`
 - Server plugin: `expo()` from `@better-auth/expo`
 - Mount `auth.handler` on GET+POST `/api/auth/*` (HTTP, not Effect RPC)
-- Email/password enabled unless OIDC env is set (then OIDC-only). `AUTH_DISABLE_SIGNUP` disables registration. Do not require email verification
+- Email/password enabled unless OIDC env is set (then OIDC-only). `AUTH_DISABLE_SIGNUP` disables email/password registration; OIDC SSO can always create a user on first login. Do not require email verification
 - Env: Better Auth secret is generated on first boot into Postgres `kv`. Public origin is `BASE_URL` (passed as Better Auth `baseURL`).
-- Expo: `createAuthClient` from `better-auth/react` + `expoClient` + `expo-secure-store`
+- Expo: `createAuthClient` from `better-auth/react` + `expoClient` + `expo-secure-store` + `expo-web-browser` (native SSO)
 - RPC: `headers: { Cookie: await authClient.getCookie() }`, `credentials: "omit"` on native
 - Session: `auth.api.getSession({ headers: requestHeaders })`
 
