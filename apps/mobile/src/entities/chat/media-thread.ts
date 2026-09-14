@@ -144,7 +144,9 @@ export const applyChatJobEvent = (
 ): ReadonlyArray<MediaThreadItem> => {
   const patch = jobPatch(event);
   if (
-    items.some((item) => item.role === "assistant" && item.jobId === event.jobId)
+    items.some(
+      (item) => item.role === "assistant" && item.jobId === event.jobId,
+    )
   ) {
     return applyJobEvent(items, event.jobId, patch);
   }
