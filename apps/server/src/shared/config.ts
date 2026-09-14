@@ -29,4 +29,5 @@ export const AppConfig = Config.all({
   authDisableSignup: Config.Boolean("AUTH_DISABLE_SIGNUP").pipe(
     Config.withDefault(false),
   ),
+  webDir: Config.String("WEB_DIR").pipe(Config.withDefault("/app/web")),
 });

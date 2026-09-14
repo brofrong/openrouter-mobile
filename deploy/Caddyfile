@@ -5,22 +5,11 @@
 {$DOMAIN} {
 	encode gzip
 
-	# RPC HTTP (NDJSON) + WebSocket streams. Disable buffering so chunks flush.
-	handle /rpc* {
-		reverse_proxy server:3000 {
-			flush_interval -1
-			transport http {
-				read_timeout 24h
-				write_timeout 24h
-			}
+	reverse_proxy server:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 24h
+			write_timeout 24h
 		}
-	}
-
-	handle /api/auth* {
-		reverse_proxy server:3000
-	}
-
-	handle {
-		reverse_proxy web:80
 	}
 }

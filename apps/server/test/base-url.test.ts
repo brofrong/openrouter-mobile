@@ -47,3 +47,11 @@ test("corsAllowedOrigins include extra localhost Expo ports", () => {
   expect(corsAllowedOrigins).toContain("http://localhost:8081");
   expect(corsAllowedOrigins).toContain("http://localhost:8086");
 });
+
+test("AppConfig.webDir defaults to /app/web", () => {
+  expect(parseConfig({}).webDir).toBe("/app/web");
+});
+
+test("AppConfig.webDir reads WEB_DIR", () => {
+  expect(parseConfig({ WEB_DIR: "/var/www" }).webDir).toBe("/var/www");
+});

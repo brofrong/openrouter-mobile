@@ -15,8 +15,10 @@ import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
 import { AuthLive } from "../shared/auth";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
+import { applyMigrations } from "../shared/migrate";
 import { corsAllowedOrigins } from "../shared/origins";
 import { BunRuntime } from "../shared/runtime";
+import { WebLive } from "../shared/web";
 import { ServerRpcs } from "./ServerRpcs";
 
 const RpcHttp = RpcServer.layerHttp({
@@ -42,7 +44,7 @@ const RpcRoutes = HttpRouter.cors({
   credentials: true,
 }).pipe(
   Layer.provideMerge(
-    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
+    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive, WebLive).pipe(
       Layer.provide(HealthLive),
       Layer.provide(ChatLive),
       Layer.provide(GenerationLive),
@@ -69,6 +71,11 @@ const HttpLive = Layer.unwrap(
   ),
 );
 
-const Main = HttpLive.pipe(Layer.provide(AuthLive), Layer.provideMerge(DbLive));
+const Main = Layer.unwrap(
+  Effect.gen(function* () {
+    yield* applyMigrations;
+    return HttpLive.pipe(Layer.provide(AuthLive));
+  }),
+).pipe(Layer.provideMerge(DbLive));
 
 BunRuntime.runMain(Layer.launch(Main));

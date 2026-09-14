@@ -180,4 +180,4 @@ export const DbLive = Layer.effect(
 `packages/db/drizzle.config.ts` — `defineConfig` from `drizzle-kit`, `dialect: "postgresql"`, `schema: "./src/schema/index.ts"`, `out: "./drizzle"`.
 
 Generate: `bun run --filter @openrouter-mobile/db db:generate`  
-Migrate: `bun run db:migrate` (root) or `bun run --filter @openrouter-mobile/db db:migrate`.
+Migrate: `drizzle-orm` `migrate` (not drizzle-kit) on server boot via `apps/server/src/shared/migrate.ts` + `drizzle-orm/effect-postgres/migrator`. Optional CLI: `bun run db:migrate` uses `drizzle-orm/postgres-js/migrator` with the same SQL folder (`packages/db/drizzle`).

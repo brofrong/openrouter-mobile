@@ -30,8 +30,7 @@ Chat uses the real OpenRouter API. Image / video / speech / audio jobs are **stu
 cp .env.example .env   # OPENROUTER_API_KEY, BASE_URL
 docker compose up -d
 bun install
-bun run db:migrate
-bun run --filter @openrouter-mobile/server start   # or `dev`; PORT if 3000 taken
+bun run --filter @openrouter-mobile/server start   # or `dev`; applies drizzle migrations, then listens
 bun run --filter @openrouter-mobile/mobile web
 ```
 
@@ -57,16 +56,24 @@ Copy `.env.example` to `.env`. Required / used vars:
 
 | Variable | Where | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | server, db | Default `postgres://openrouter:openrouter@localhost:5432/openrouter` |
+| `DATABASE_URL` | server, db | Default `postgres://openrouter:openrouter@localhost:5432/openrouter`. Prod compose builds this from `POSTGRES_*`. |
+| `PORT` | server | HTTP listen port, default `3000`. Prod compose keeps `3000` (Caddy → `server:3000`). |
+| `NODE_ENV` | server | Local default `development`. Prod compose defaults to `production`. |
 | `OPENROUTER_API_KEY` | server only | Chat streaming. Missing key → chat send fails; media stubs still work. |
-| `BASE_URL` | server, mobile | Public origin of the auth/RPC server (e.g. `https://openrouter.brofrong.ru`). Auth, `/rpc`, and `/rpc/ws` are derived from it. Mobile also accepts `EXPO_PUBLIC_BASE_URL` (Expo inlines `EXPO_PUBLIC_*`). |
-| `PORT` | server | HTTP listen port, default `3000`. Behind a reverse proxy this can differ from the port in `BASE_URL`. |
-| `OPENROUTER_MODEL` | server | Optional chat model override (`AppConfig` default `openai/gpt-4o-mini`). |
-| `AUTH_DISABLE_SIGNUP` | server | Optional. `true`/`yes`/`1` disables new accounts (email sign-up and first-time OIDC login). |
-| `OIDC_ISSUER` | server | Optional. OIDC issuer URL (or discovery URL). When set with client id/secret, OIDC is the only sign-in method. Callback: `{BASE_URL}/api/auth/callback/oidc`. |
+| `OPENROUTER_MODEL` | server | Chat model override. Default `openai/gpt-4o-mini`. |
+| `BASE_URL` | server, mobile | Public origin (e.g. `https://openrouter.brofrong.ru`). Auth, `/rpc`, and `/rpc/ws` are derived from it. |
+| `EXPO_PUBLIC_BASE_URL` | mobile / image build | Same origin as `BASE_URL`. Expo inlines `EXPO_PUBLIC_*`; `app.config` copies `BASE_URL` if this is unset. |
+| `WEB_DIR` | server | Expo web export (`index.html`). Default `/app/web` (Docker). Missing file → static skipped. |
+| `AUTH_DISABLE_SIGNUP` | server | `true`/`yes`/`1` disables new accounts (email sign-up and first-time OIDC login). Default `false`. |
+| `OIDC_ISSUER` | server | Optional. Issuer or discovery URL. With client id/secret, OIDC is the only sign-in. Callback: `{BASE_URL}/api/auth/callback/oidc`. |
 | `OIDC_CLIENT_ID` | server | Required together with `OIDC_ISSUER` and `OIDC_CLIENT_SECRET`. |
 | `OIDC_CLIENT_SECRET` | server | Required together with `OIDC_ISSUER` and `OIDC_CLIENT_ID`. |
-| `OIDC_SCOPES` | server | Optional. Default `openid email profile`. |
+| `OIDC_SCOPES` | server | Default `openid email profile`. |
+| `BETTER_AUTH_SECRET` | server | Optional. Seed on first boot if ≥32 chars; otherwise generated into `kv`. |
+| `BETTER_AUTH_URL` | server | Optional legacy alias for `BASE_URL`. |
+| `POSTGRES_USER` / `PASSWORD` / `DB` | compose | Postgres service + prod `DATABASE_URL`. |
+| `DOMAIN` / `ACME_EMAIL` | Caddy | TLS host and ACME contact (`deploy/Caddyfile`). |
+| `IMAGE_TAG` | compose | GHCR tag, default `latest`. |
 
 ## Quality
 
@@ -74,7 +81,8 @@ Copy `.env.example` to `.env`. Required / used vars:
 bun run check          # Biome lint + format
 bun run check:fix      # Biome --write
 bun run check-types    # per-package `tsc --noEmit` (mobile pins TypeScript ~6.0.3; do not typecheck Expo with root TS 7)
-bun run db:migrate     # drizzle-kit migrate
+bun run db:migrate     # drizzle-orm migrate (also runs automatically on server start)
+bun run --filter @openrouter-mobile/db db:generate  # drizzle-kit generate only
 ```
 
 ## Release
@@ -88,7 +96,7 @@ bun run release minor      # 0.1.0
 bun run release major      # 1.0.0
 ```
 
-Tag `v*` runs **Release**: `ghcr.io/<owner>/openrouter-mobile/server` and `.../web` (semver + `latest`), and the APK on the GitHub Release. PRs / `main` only run Biome.
+Tag `v*` runs **Release**: `ghcr.io/<owner>/openrouter-mobile/server` (API + web, semver + `latest`), and the APK on the GitHub Release. PRs / `main` only run Biome.
 
 ## Auth and RPC
 

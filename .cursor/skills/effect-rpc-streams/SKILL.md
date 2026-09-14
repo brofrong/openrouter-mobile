@@ -149,7 +149,7 @@ const RpcRoutes = HttpRouter.cors({
   credentials: true,
 }).pipe(
   Layer.provideMerge(
-    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive).pipe(
+    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive, WebLive).pipe(
       Layer.provide(HealthLive),
       Layer.provide(ChatLive),
       Layer.provide(GenerationLive),
@@ -167,9 +167,15 @@ const HttpLive = Layer.unwrap(
     ),
   ),
 )
+const Main = Layer.unwrap(
+  Effect.gen(function* () {
+    yield* applyMigrations
+    return HttpLive.pipe(Layer.provide(AuthLive))
+  }),
+).pipe(Layer.provideMerge(DbLive))
 ```
 
-HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Health handler: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })` in `apps/server/src/features/health/HealthLive.ts`. Runtime entry: `apps/server/src/shared/runtime.ts` re-exports `BunRuntime`.
+HTTP is POST `/rpc`. WebSocket upgrade is GET `/rpc/ws`. Expo web export is served from `WEB_DIR` (`HttpStaticServer`, SPA fallback) when `index.html` is present. `applyMigrations` runs `drizzle-orm/effect-postgres/migrator` before Auth/HTTP so `kv` exists. Health handler: `HealthRpcs.toLayer({ Health: () => Effect.succeed({ ok: true as const }) })` in `apps/server/src/features/health/HealthLive.ts`. Runtime entry: `apps/server/src/shared/runtime.ts` re-exports `BunRuntime`.
 
 ## Durable stream kernel
 

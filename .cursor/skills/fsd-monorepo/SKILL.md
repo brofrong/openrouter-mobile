@@ -19,7 +19,7 @@ import direction `app → features → entities → shared`; features never impo
 - `apps/server/src/app/main.ts` — `BunRuntime.runMain(Layer.launch(Main))`
 - `apps/server/src/app/ServerRpcs.ts` — `ChatRpcs.merge(JobRpcs, MediaRpcs).middleware(AuthMiddleware).merge(HealthRpcs)`
 - `apps/server/src/features/{chat,generation,durable-stream,health}`
-- `apps/server/src/shared/{runtime,auth,db,config}.ts`
+- `apps/server/src/shared/{runtime,auth,db,config,migrate,web}.ts`
 - `apps/mobile/src/app/` — Expo Router (`(tabs)`, `sign-in`, `sign-up`)
 - `apps/mobile/src/features/{chat,images,video,speech,audio}`
 - `apps/mobile/src/shared/{runtime,rpc,auth-client,afterSeq}.ts`

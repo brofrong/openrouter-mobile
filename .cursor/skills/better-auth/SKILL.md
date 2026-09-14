@@ -67,7 +67,7 @@ export const AuthLive = Layer.effect(
 ```bash
 bun x auth@latest generate --config apps/server/src/shared/auth.ts --output packages/db/src/schema/auth.ts --yes
 bun run --filter @openrouter-mobile/db db:generate
-bun run db:migrate
+# migrations apply on server start (`drizzle-orm` migrate). CLI: bun run db:migrate
 ```
 
 Generated file exports tables plus `authRelations` via `defineRelationsPart`. Merge after app relations in `packages/db/src/relations.ts`:
