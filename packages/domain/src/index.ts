@@ -14,5 +14,4 @@ export * from "./message-content";
 export * from "./OutputModality";
 export * from "./ReasoningEffort";
 export * from "./StreamEvent";
-export * from "./TokenChunk";
 export * from "./UsageSummary";

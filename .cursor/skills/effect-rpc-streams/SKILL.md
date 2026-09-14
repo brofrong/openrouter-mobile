@@ -7,7 +7,7 @@ description: Durable Effect RPC streams — persist-then-publish, subscribe-then
 
 Producer: persist → publish (never publish first).
 Consumer: subscribe live (wait until subscribed) → replay seq > afterSeq → concat live filtered seq > max(replayed).
-Stream procedure payloads have `afterSeq: Schema.optionalKey(Schema.Number)` (`ChatSubscribe`, `JobSubscribe`). `ChatMessages` may also take `afterSeq` as an optional history cursor. `ChatSend` is unary (starts generation; do not reconnect through it).
+Stream procedure payloads have `afterSeq: Schema.optionalKey(Schema.Number)` (`ChatSubscribe`, `JobSubscribe`). `ChatMessages` may also take `afterSeq` as an optional history cursor; its page includes `headSeq`, `inProgress`, `jobs`, and `generating`. Client: load the page, `setAfterSeq(chatId, headSeq)`, then subscribe. `ChatSend` is unary (starts generation; do not reconnect through it).
 Client stores last `seq` from the stream and sends it on reconnect (`apps/mobile/src/shared/afterSeq.ts`).
 Do not use Socket.IO. Live server transports are `RpcServer.layerHttp({ protocol: "http" | "websocket" })`.
 
@@ -210,7 +210,7 @@ Consumer (`subscribe`): `Stream.unwrap` → `PubSub.subscribe` (wait until subsc
 
 - Source of truth: `stream_events(stream_id, seq, payload)`
 - In-memory PubSub is a live tail only — chunks still persist if nobody is connected
-- `ChatSubscribe` / `JobSubscribe` map this stream to `TokenChunk` / `JobEvent`
+- `ChatSubscribe` maps this stream to `ChatStreamEvent` (`user` / `token` / `title` / `error` / `done` / `job`). `JobSubscribe` maps to `JobEvent`.
 
 ## Client (`apps/mobile/src/shared/rpc.ts`)
 
@@ -236,3 +236,5 @@ RpcSerialization.layerNdjson
 ```
 
 Queries/mutations (`ChatList`, `ChatSend`, `ImageGenerate`, …) go over HTTP POST `/rpc`. Streams (`ChatSubscribe`, `JobSubscribe`) go over WebSocket `/rpc/ws`. Two client services (`RpcHttp`, `RpcWs`) share one `ManagedRuntime` in `apps/mobile/src/shared/runtime.ts`; each protocol layer is provided privately so `Protocol` does not clash.
+
+Do not open `ChatSubscribe` until `ChatMessages` has returned. Seed the cursor with `setAfterSeq(chatId, page.headSeq)` (or `0` for an empty new chat), then subscribe. Reconnects reuse the last observed `seq`.
