@@ -61,8 +61,10 @@ export default function SignUpScreen() {
         onChangeText={setEmail}
       />
       <Input
+        autoComplete="new-password"
         placeholder="Password (min 8 characters)"
         secureTextEntry
+        type="password"
         value={password}
         onChangeText={setPassword}
       />

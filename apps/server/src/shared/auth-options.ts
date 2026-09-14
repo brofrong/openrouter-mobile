@@ -5,7 +5,9 @@ export { OIDC_PROVIDER_ID };
 
 export type OidcSettings = {
   issuer: string;
-  discoveryUrl: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  userInfoUrl: string;
   clientId: string;
   clientSecret: string;
   scopes: readonly string[];
@@ -33,12 +35,15 @@ export const parseOidcScopes = (
   return scopes.length > 0 ? scopes : DEFAULT_OIDC_SCOPES.split(" ");
 };
 
-export const toOidcDiscoveryUrl = (issuer: string): string => {
-  const trimmed = issuer.replace(/\/+$/, "");
-  if (trimmed.endsWith("/.well-known/openid-configuration")) {
-    return trimmed;
-  }
-  return `${trimmed}/.well-known/openid-configuration`;
+export const oidcEndpointsFromIssuer = (
+  issuer: string,
+): Pick<OidcSettings, "authorizationUrl" | "tokenUrl" | "userInfoUrl"> => {
+  const base = issuer.replace(/\/+$/, "");
+  return {
+    authorizationUrl: `${base}/authorize`,
+    tokenUrl: `${base}/api/oidc/token`,
+    userInfoUrl: `${base}/api/oidc/userinfo`,
+  };
 };
 
 export const resolveOidc = (input: {
@@ -74,7 +79,7 @@ export const resolveOidc = (input: {
     _tag: "on",
     settings: {
       issuer,
-      discoveryUrl: toOidcDiscoveryUrl(issuer),
+      ...oidcEndpointsFromIssuer(issuer),
       clientId,
       clientSecret,
       scopes: parseOidcScopes(input.scopes),
@@ -115,19 +120,37 @@ export const publicAuthSettings = (input: {
   });
 };
 
+export const oidcEnvFromConfig = (config: {
+  oidcIssuer: Option.Option<string>;
+  oidcClientId: Option.Option<Redacted.Redacted<string>>;
+  oidcClientSecret: Option.Option<Redacted.Redacted<string>>;
+  oidcScopes: string;
+}) => ({
+  issuer: Option.getOrUndefined(config.oidcIssuer),
+  clientId: Option.getOrUndefined(
+    Option.map(config.oidcClientId, Redacted.value),
+  ),
+  clientSecret: Option.getOrUndefined(
+    Option.map(config.oidcClientSecret, Redacted.value),
+  ),
+  scopes: config.oidcScopes,
+});
+
 export const resolveOidcFromConfig = (config: {
   oidcIssuer: Option.Option<string>;
   oidcClientId: Option.Option<Redacted.Redacted<string>>;
   oidcClientSecret: Option.Option<Redacted.Redacted<string>>;
   oidcScopes: string;
-}): ResolvedOidc =>
-  resolveOidc({
-    issuer: Option.getOrUndefined(config.oidcIssuer),
-    clientId: Option.getOrUndefined(
-      Option.map(config.oidcClientId, Redacted.value),
-    ),
-    clientSecret: Option.getOrUndefined(
-      Option.map(config.oidcClientSecret, Redacted.value),
-    ),
-    scopes: config.oidcScopes,
+}): ResolvedOidc => resolveOidc(oidcEnvFromConfig(config));
+
+export const publicAuthSettingsFromConfig = (config: {
+  oidcIssuer: Option.Option<string>;
+  oidcClientId: Option.Option<Redacted.Redacted<string>>;
+  oidcClientSecret: Option.Option<Redacted.Redacted<string>>;
+  oidcScopes: string;
+  authDisableSignup: boolean;
+}): AuthSettings =>
+  publicAuthSettings({
+    ...oidcEnvFromConfig(config),
+    disableSignup: config.authDisableSignup,
   });

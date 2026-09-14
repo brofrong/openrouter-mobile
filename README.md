@@ -34,7 +34,7 @@ bun run --filter @openrouter-mobile/server start   # or `dev`; applies drizzle m
 bun run --filter @openrouter-mobile/mobile web
 ```
 
-Root `bun run dev` is Turbo (Expo `start` + server `--watch`). Smoke wants `mobile web` plus an explicit server `PORT`. Native: `bun run --filter @openrouter-mobile/mobile start` (then iOS / Android).
+Root `bun run dev` is Turbo: server `--watch` plus Expo web. Both read the repo-root `.env` (`BASE_URL`, OIDC). Native: `bun run --filter @openrouter-mobile/mobile start` (then iOS / Android).
 
 ### Port 3000
 

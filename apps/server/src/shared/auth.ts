@@ -20,8 +20,10 @@ import {
 import { DEFAULT_BASE_URL } from "./baseUrl";
 import { AppConfig } from "./config";
 import { getOrCreateKv } from "./kv";
+import { loadRepoEnv } from "./loadEnv";
 import { makeTrustedOrigins } from "./origins";
 
+loadRepoEnv();
 const databaseUrl =
   process.env.DATABASE_URL ??
   "postgres://openrouter:openrouter@localhost:5432/openrouter";
@@ -83,7 +85,9 @@ export const createAuth = (
                 providerId: OIDC_PROVIDER_ID,
                 clientId: options.oidc.clientId,
                 clientSecret: options.oidc.clientSecret,
-                discoveryUrl: options.oidc.discoveryUrl,
+                authorizationUrl: options.oidc.authorizationUrl,
+                tokenUrl: options.oidc.tokenUrl,
+                userInfoUrl: options.oidc.userInfoUrl,
                 scopes: [...options.oidc.scopes],
                 disableSignUp: disableSignup,
               },

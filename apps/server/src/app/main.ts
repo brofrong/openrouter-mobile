@@ -15,11 +15,14 @@ import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
 import { AuthLive } from "../shared/auth";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
+import { loadRepoEnv } from "../shared/loadEnv";
 import { applyMigrations } from "../shared/migrate";
 import { corsAllowedOrigins } from "../shared/origins";
 import { BunRuntime } from "../shared/runtime";
 import { WebLive } from "../shared/web";
 import { ServerRpcs } from "./ServerRpcs";
+
+loadRepoEnv();
 
 const RpcHttp = RpcServer.layerHttp({
   group: ServerRpcs,

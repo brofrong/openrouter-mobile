@@ -2,11 +2,12 @@ import { expect, test } from "bun:test";
 import { AuthSettings, OIDC_PROVIDER_ID } from "@openrouter-mobile/domain";
 import { ConfigProvider, Effect } from "effect";
 import {
+  oidcEndpointsFromIssuer,
   oidcIncompleteMessage,
   parseOidcScopes,
   publicAuthSettings,
+  publicAuthSettingsFromConfig,
   resolveOidc,
-  toOidcDiscoveryUrl,
 } from "../src/shared/auth-options";
 import { AppConfig } from "../src/shared/config";
 
@@ -47,7 +48,9 @@ test("resolveOidc enables OIDC when issuer, client id, and secret are set", () =
     _tag: "on",
     settings: {
       issuer: "https://sso.example.com/",
-      discoveryUrl: "https://sso.example.com/.well-known/openid-configuration",
+      authorizationUrl: "https://sso.example.com/authorize",
+      tokenUrl: "https://sso.example.com/api/oidc/token",
+      userInfoUrl: "https://sso.example.com/api/oidc/userinfo",
       clientId: "client",
       clientSecret: "secret",
       scopes: ["openid", "profile"],
@@ -55,12 +58,12 @@ test("resolveOidc enables OIDC when issuer, client id, and secret are set", () =
   });
 });
 
-test("toOidcDiscoveryUrl keeps an explicit discovery URL", () => {
-  expect(
-    toOidcDiscoveryUrl(
-      "https://sso.example.com/realms/app/.well-known/openid-configuration",
-    ),
-  ).toBe("https://sso.example.com/realms/app/.well-known/openid-configuration");
+test("oidcEndpointsFromIssuer strips trailing slashes", () => {
+  expect(oidcEndpointsFromIssuer("https://sso.example.com/")).toEqual({
+    authorizationUrl: "https://sso.example.com/authorize",
+    tokenUrl: "https://sso.example.com/api/oidc/token",
+    userInfoUrl: "https://sso.example.com/api/oidc/userinfo",
+  });
 });
 
 test("parseOidcScopes falls back to openid email profile", () => {
@@ -95,6 +98,25 @@ test("publicAuthSettings exposes OIDC-only public flags", () => {
     disableSignup: "true",
   });
   expect(settings).toEqual(
+    new AuthSettings({
+      oidcEnabled: true,
+      signupEnabled: false,
+      oidcProviderId: OIDC_PROVIDER_ID,
+    }),
+  );
+});
+
+test("publicAuthSettingsFromConfig matches AppConfig OIDC flags", () => {
+  expect(
+    publicAuthSettingsFromConfig(
+      parseConfig({
+        OIDC_ISSUER: "https://sso.example.com",
+        OIDC_CLIENT_ID: "client",
+        OIDC_CLIENT_SECRET: "secret",
+        AUTH_DISABLE_SIGNUP: "true",
+      }),
+    ),
+  ).toEqual(
     new AuthSettings({
       oidcEnabled: true,
       signupEnabled: false,

@@ -91,8 +91,10 @@ export default function SignInScreen() {
         onChangeText={setEmail}
       />
       <Input
+        autoComplete="current-password"
         placeholder="Password"
         secureTextEntry
+        type="password"
         value={password}
         onChangeText={setPassword}
       />

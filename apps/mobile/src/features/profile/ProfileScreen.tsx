@@ -220,10 +220,11 @@ function ProfileTab() {
         <YStack gap="$2">
           <H3>Password</H3>
           <Input
-            autoComplete="password"
+            autoComplete="current-password"
             onChangeText={setCurrentPassword}
             placeholder="Current password"
             secureTextEntry
+            type="password"
             value={currentPassword}
           />
           <Input
@@ -231,6 +232,7 @@ function ProfileTab() {
             onChangeText={setNewPassword}
             placeholder="New password"
             secureTextEntry
+            type="password"
             value={newPassword}
           />
           <Input
@@ -238,6 +240,7 @@ function ProfileTab() {
             onChangeText={setConfirmPassword}
             placeholder="Confirm new password"
             secureTextEntry
+            type="password"
             value={confirmPassword}
           />
           {passwordError !== undefined ? (
