@@ -79,20 +79,13 @@ bun run db:migrate     # drizzle-kit migrate
 
 ## Release
 
-Version lives in the root `package.json`. Bump it, then push the tag — that is the only trigger for publishing images and the APK:
+Version lives in the root `package.json`. `bun run release` bumps it, commits, tags `vX.Y.Z`, and pushes the commit + tag to `origin` — that tag is the only trigger for publishing images and the APK.
 
 ```bash
-bun run version:bump           # patch (0.0.0 → 0.0.1)
-bun run version:bump minor     # 0.1.0
-bun run version:bump major     # 1.0.0
-bun run version:bump 1.4.0     # exact version, must be greater than current
-bun run version:bump -- --push # also `git push` commit + tag
-```
-
-The script commits `package.json` and creates an annotated `vX.Y.Z` tag. Without `--push`:
-
-```bash
-git push origin HEAD --follow-tags
+bun run release            # interactive: major / minor / bugfix
+bun run release bugfix     # 0.0.1 → 0.0.2
+bun run release minor      # 0.1.0
+bun run release major      # 1.0.0
 ```
 
 Tag `v*` runs **Release**: `ghcr.io/<owner>/openrouter-mobile/server` and `.../web` (semver + `latest`), and the APK on the GitHub Release. PRs / `main` only run Biome.
