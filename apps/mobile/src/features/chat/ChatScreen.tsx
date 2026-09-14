@@ -1,6 +1,9 @@
 import {
+  AppError,
   type Chat,
   type ChatId,
+  type ChatStreamEvent,
+  ChatUserEvent,
   type MessageId,
   type ReasoningEffort,
   withChatTitle,
@@ -21,7 +24,7 @@ import { useCategoryDefaultModel } from "../../entities/ai-config/use-ai-config"
 import { ChatMenu, ChatMenuButton } from "../../entities/chat/ChatMenu";
 import { ChatRenameDialog } from "../../entities/chat/ChatRenameDialog";
 import { resolveEffort } from "../../entities/model/catalog";
-import { withAfterSeq } from "../../shared/afterSeq";
+import { setAfterSeq, withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp, RpcWs } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
@@ -33,46 +36,71 @@ import { ChatMessage } from "./ChatMessage";
 import { ComposerBar } from "./ComposerBar";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import {
+  applyChatStreamEvent,
   CHAT_MESSAGE_PAGE_SIZE,
-  commitDraft,
+  type ChatThreadState,
+  emptyThread,
+  hydrateFromPage,
   mergeOlderMessages,
   oldestServerMessageId,
-  type ThreadItem,
   toThreadItem,
 } from "./thread";
 import { useSelectedModel } from "./use-selected-model";
+
+const isAlreadyGenerating = (failure: unknown): boolean => {
+  if (failure instanceof AppError) {
+    return (
+      failure.code === "VALIDATION" && failure.message === "Already generating"
+    );
+  }
+  if (typeof failure === "object" && failure !== null) {
+    const record = failure as { code?: unknown; message?: unknown };
+    return (
+      record.code === "VALIDATION" && record.message === "Already generating"
+    );
+  }
+  return false;
+};
+
+const withThreadError = (
+  state: ChatThreadState,
+  error: string | undefined,
+): ChatThreadState =>
+  error === undefined
+    ? {
+        messages: state.messages,
+        draft: state.draft,
+        generating: state.generating,
+      }
+    : { ...state, error };
 
 export function ChatScreen() {
   const { belongsToKind, routeChatId, openChat } = useChatRoute("text");
   const [chats, setChats] = useState<ReadonlyArray<Chat>>([]);
   const [selectedId, setSelectedId] = useState<ChatId | undefined>(routeChatId);
-  const [messages, setMessages] = useState<ReadonlyArray<ThreadItem>>([]);
+  const [thread, setThread] = useState<ChatThreadState>(emptyThread);
   const [hasMore, setHasMore] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [draft, setDraft] = useState("");
   const [composer, setComposer] = useState("");
   const [attachments, setAttachments] = useState<ReadonlyArray<string>>([]);
-  const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
-  const [waitingReply, setWaitingReply] = useState(false);
+  const [streamReady, setStreamReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState<Chat | undefined>();
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string | undefined>();
   const defaultModelId = useCategoryDefaultModel("text");
   const selectedModel = useSelectedModel(defaultModelId, selectedId);
-  const acceptTokensRef = useRef(false);
-  const draftRef = useRef("");
   const loadingOlderRef = useRef(false);
   const loadedIdRef = useRef<ChatId | undefined>(undefined);
   const restoredIdRef = useRef<ChatId | undefined>(undefined);
   const selectedIdRef = useRef(selectedId);
-  draftRef.current = draft;
   selectedIdRef.current = selectedId;
   const navigation = useNavigation();
   const selectedChat = chats.find((chat) => chat.id === selectedId);
   const selectedTitle = selectedChat?.title;
+  const waitingReply = thread.generating && thread.draft.length === 0;
 
   const applyChat = useCallback((next: Chat) => {
     setChats((current) => {
@@ -101,7 +129,9 @@ export function ChatScreen() {
         }).pipe(
           Effect.match({
             onFailure: (failure) => {
-              setError(formatRpcError(failure));
+              setThread((current) =>
+                withThreadError(current, formatRpcError(failure)),
+              );
             },
             onSuccess: (chat) => {
               applyChat(chat);
@@ -146,11 +176,13 @@ export function ChatScreen() {
       }).pipe(
         Effect.match({
           onFailure: (failure) => {
-            setError(formatRpcError(failure));
+            setThread((current) =>
+              withThreadError(current, formatRpcError(failure)),
+            );
           },
           onSuccess: (list) => {
             setChats(list);
-            setError(undefined);
+            setThread((current) => withThreadError(current, undefined));
           },
         }),
       ),
@@ -233,7 +265,9 @@ export function ChatScreen() {
               if (selectedIdRef.current !== chatId) {
                 return;
               }
-              setError(formatRpcError(failure));
+              setThread((current) =>
+                withThreadError(current, formatRpcError(failure)),
+              );
               if (prepend) {
                 loadingOlderRef.current = false;
                 setLoadingOlder(false);
@@ -245,14 +279,21 @@ export function ChatScreen() {
               if (selectedIdRef.current !== chatId) {
                 return;
               }
-              const items = page.messages.map(toThreadItem);
               if (prepend) {
-                setMessages((current) => mergeOlderMessages(current, items));
+                setThread((current) => ({
+                  ...current,
+                  messages: mergeOlderMessages(
+                    current.messages,
+                    page.messages.map(toThreadItem),
+                  ),
+                }));
                 loadingOlderRef.current = false;
                 setLoadingOlder(false);
               } else {
                 pinToBottom();
-                setMessages(items);
+                setThread(hydrateFromPage(page));
+                setAfterSeq(chatId, page.headSeq);
+                setStreamReady(true);
                 setLoadingThread(false);
               }
               setHasMore(page.hasMore);
@@ -275,20 +316,22 @@ export function ChatScreen() {
       setSelectedId(chatId);
       selectedIdRef.current = chatId;
       loadedIdRef.current = chatId;
+      setStreamReady(false);
       if (resetThread) {
-        acceptTokensRef.current = false;
-        setWaitingReply(false);
-        setMessages([]);
-        setDraft("");
+        setThread(emptyThread());
         setHasMore(false);
         setLoadingThread(load);
+      } else {
+        setThread((current) => withThreadError(current, undefined));
       }
-      setError(undefined);
       setLoadingOlder(false);
       setMenuOpen(false);
       pinToBottom();
       if (load) {
         loadMessages(chatId);
+      } else {
+        setAfterSeq(chatId, 0);
+        setStreamReady(true);
       }
     },
     [loadMessages, pinToBottom],
@@ -305,17 +348,14 @@ export function ChatScreen() {
       return;
     }
     if (routeChatId === undefined) {
-      acceptTokensRef.current = false;
       loadingOlderRef.current = false;
-      setWaitingReply(false);
+      setStreamReady(false);
       setSelectedId(undefined);
       selectedIdRef.current = undefined;
       loadedIdRef.current = undefined;
       restoredIdRef.current = undefined;
-      setMessages([]);
-      setDraft("");
+      setThread(emptyThread());
       setHasMore(false);
-      setError(undefined);
       setLoadingThread(false);
       setLoadingOlder(false);
       return;
@@ -347,12 +387,12 @@ export function ChatScreen() {
     if (selectedId === undefined || !hasMore || loadingOlderRef.current) {
       return;
     }
-    const before = oldestServerMessageId(messages);
+    const before = oldestServerMessageId(thread.messages);
     if (before === undefined) {
       return;
     }
     loadMessages(selectedId, before as MessageId);
-  }, [hasMore, loadMessages, messages, selectedId]);
+  }, [hasMore, loadMessages, selectedId, thread.messages]);
 
   const applyCreatedChat = (chat: Chat, resetThread = true) => {
     setChats((current) => [chat, ...current]);
@@ -369,12 +409,12 @@ export function ChatScreen() {
       }).pipe(
         Effect.match({
           onFailure: (failure) => {
-            setError(formatRpcError(failure));
+            setThread((current) =>
+              withThreadError(current, formatRpcError(failure)),
+            );
             setBusy(false);
           },
           onSuccess: (chat) => {
-            acceptTokensRef.current = false;
-            setWaitingReply(false);
             applyCreatedChat(chat);
             setBusy(false);
           },
@@ -392,12 +432,12 @@ export function ChatScreen() {
     setComposer("");
     setAttachments([]);
     setBusy(true);
-    setWaitingReply(true);
     pinToBottom();
-    setMessages((current) => commitDraft(current, draftRef.current));
-    setDraft("");
-    setError(undefined);
-    acceptTokensRef.current = true;
+    setThread((current) => ({
+      messages: current.messages,
+      draft: current.draft,
+      generating: true,
+    }));
     void mobileRuntime.runPromise(
       Effect.gen(function* () {
         const rpc = yield* RpcHttp;
@@ -405,7 +445,6 @@ export function ChatScreen() {
         if (chatId === undefined) {
           const chat = yield* rpc.ChatCreate(createChatPayload());
           applyCreatedChat(chat, false);
-          acceptTokensRef.current = true;
           chatId = chat.id;
         }
         return yield* rpc.ChatSend({
@@ -420,15 +459,25 @@ export function ChatScreen() {
       }).pipe(
         Effect.match({
           onFailure: (failure) => {
-            setError(formatRpcError(failure));
             setBusy(false);
-            setWaitingReply(false);
-            acceptTokensRef.current = false;
+            const alreadyGenerating = isAlreadyGenerating(failure);
+            setThread((current) => ({
+              ...withThreadError(current, formatRpcError(failure)),
+              generating: alreadyGenerating,
+            }));
           },
           onSuccess: (message) => {
             pinToBottom();
-            setMessages((current) => [...current, toThreadItem(message)]);
-            setError(undefined);
+            setThread((current) =>
+              applyChatStreamEvent(
+                current,
+                new ChatUserEvent({
+                  _tag: "user",
+                  seq: 0,
+                  message,
+                }),
+              ),
+            );
             setBusy(false);
           },
         }),
@@ -473,67 +522,51 @@ export function ChatScreen() {
     );
   };
 
-  const onToken = useCallback(
-    (chunk: { seq: number; text: string; error?: string; title?: string }) => {
-      if (chunk.title !== undefined && chunk.title.length > 0) {
-        const chatId = selectedIdRef.current;
-        if (chatId !== undefined) {
-          setChats((current) =>
-            current.map((chat) =>
-              chat.id === chatId
-                ? withChatTitle(chat, chunk.title as string)
-                : chat,
-            ),
-          );
-        }
+  const onChunk = useCallback((event: ChatStreamEvent) => {
+    if (event._tag === "title" && event.title.length > 0) {
+      const chatId = selectedIdRef.current;
+      if (chatId !== undefined) {
+        setChats((current) =>
+          current.map((chat) =>
+            chat.id === chatId ? withChatTitle(chat, event.title) : chat,
+          ),
+        );
       }
-      if (chunk.error !== undefined && chunk.error.length > 0) {
-        setError(`OPENROUTER: ${chunk.error}`);
-        setBusy(false);
-        setWaitingReply(false);
-        return;
-      }
-      if (chunk.text.length > 0) {
-        setError(undefined);
-      }
-      if (!acceptTokensRef.current || chunk.text.length === 0) {
-        return;
-      }
-      setWaitingReply(false);
-      setDraft((current) => current + chunk.text);
-    },
-    [],
-  );
+    }
+    setThread((current) => applyChatStreamEvent(current, event));
+  }, []);
 
   const onStreamError = useCallback((message: string) => {
-    setError(message);
-    setWaitingReply(false);
+    setThread((current) => ({
+      ...withThreadError(current, message),
+      generating: false,
+    }));
   }, []);
 
   useRpcStream({
-    enabled: selectedId !== undefined,
+    enabled: selectedId !== undefined && streamReady,
     key: selectedId ?? "",
     make: subscribeMake,
-    onChunk: onToken,
+    onChunk,
     onError: onStreamError,
   });
 
   const visibleMessages = useMemo(() => {
-    if (draft.length === 0) {
-      return messages;
+    if (thread.draft.length === 0) {
+      return thread.messages;
     }
     return [
-      ...messages,
+      ...thread.messages,
       {
         id: "draft",
         role: "assistant" as const,
-        content: draft,
+        content: thread.draft,
       },
     ];
-  }, [draft, messages]);
+  }, [thread.draft, thread.messages]);
 
   underfillRef.current = () => {
-    if (hasMore && messages.length > 0) {
+    if (hasMore && thread.messages.length > 0) {
       loadOlder();
     }
   };
@@ -553,7 +586,7 @@ export function ChatScreen() {
       <ChatMenu
         busy={busy}
         chats={chats}
-        error={error}
+        error={thread.error}
         onClose={() => {
           setMenuOpen(false);
         }}
@@ -576,9 +609,9 @@ export function ChatScreen() {
         open={renaming !== undefined}
         title={renaming?.title ?? ""}
       />
-      {error !== undefined && !menuOpen ? (
+      {thread.error !== undefined && !menuOpen ? (
         <Paragraph color="$red10" px="$3" pt="$3">
-          {error}
+          {thread.error}
         </Paragraph>
       ) : null}
       <ScrollView
@@ -590,13 +623,15 @@ export function ChatScreen() {
         onScroll={handleThreadScroll}
         onContentSizeChange={onContentSizeChange}
       >
-        {selectedId === undefined && !waitingReply ? (
+        {selectedId === undefined && !thread.generating ? (
           <Paragraph color="$color10">
             Send a message to start a new chat.
           </Paragraph>
-        ) : loadingThread && visibleMessages.length === 0 && !waitingReply ? (
+        ) : loadingThread &&
+          visibleMessages.length === 0 &&
+          !thread.generating ? (
           <Spinner />
-        ) : visibleMessages.length === 0 && !waitingReply ? (
+        ) : visibleMessages.length === 0 && !thread.generating ? (
           <Paragraph color="$color10">No messages yet.</Paragraph>
         ) : (
           <>
@@ -609,7 +644,7 @@ export function ChatScreen() {
             {visibleMessages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
-            {waitingReply && draft.length === 0 ? <ThinkingIndicator /> : null}
+            {waitingReply ? <ThinkingIndicator /> : null}
           </>
         )}
       </ScrollView>
