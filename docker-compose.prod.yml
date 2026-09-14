@@ -1,0 +1,130 @@
+# Production stack: GHCR web + server, Postgres, Caddy (HTTPS).
+#
+# Images: https://github.com/brofrong?tab=packages&repo_name=openrouter-mobile
+#
+#   echo "$GITHUB_TOKEN" | docker login ghcr.io -u brofrong --password-stdin
+#   cp .env.example .env   # set POSTGRES_PASSWORD, OPENROUTER_API_KEY, DOMAIN, BASE_URL, ACME_EMAIL
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# BASE_URL must be https://$DOMAIN (same origin as Caddy). Rebuild/republish
+# `web` with matching EXPO_PUBLIC_BASE_URL (GitHub Actions variable).
+
+name: openrouter-mobile
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-server-image: &server-image ghcr.io/brofrong/openrouter-mobile/server:${IMAGE_TAG:-latest}
+x-web-image: &web-image ghcr.io/brofrong/openrouter-mobile/web:${IMAGE_TAG:-latest}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openrouter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-openrouter}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    shm_size: 128mb
+
+  migrate:
+    image: *server-image
+    pull_policy: always
+    restart: on-failure
+    logging: *default-logging
+    working_dir: /app/packages/db
+    command:
+      [
+        "bunx",
+        "--bun",
+        "drizzle-kit@1.0.0-rc.5-ab785fc",
+        "migrate",
+      ]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-openrouter}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openrouter}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  server:
+    image: *server-image
+    pull_policy: always
+    restart: unless-stopped
+    logging: *default-logging
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-openrouter}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openrouter}
+      BASE_URL: ${BASE_URL:?set BASE_URL in .env (https://$DOMAIN)}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/auth/ok').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  web:
+    image: *web-image
+    pull_policy: always
+    restart: unless-stopped
+    logging: *default-logging
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      server:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -1,5 +1,6 @@
 import type { UsageRange, UsageSummary } from "@openrouter-mobile/domain";
 import { Effect } from "effect";
+import Constants from "expo-constants";
 import {
   Component,
   type ReactNode,
@@ -18,6 +19,7 @@ import {
   YStack,
 } from "tamagui";
 import { UserAvatar } from "../../entities/user/UserAvatar";
+import { formatAppVersion } from "../../shared/app-version";
 import { authClient } from "../../shared/auth-client";
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp } from "../../shared/rpc";
@@ -28,6 +30,8 @@ import { AiUsageDashboard } from "./AiUsageDashboard";
 import type { UsageMetric } from "./format-usage";
 
 type ProfileTab = "profile" | "ai" | "ai-config";
+
+const appVersionLabel = formatAppVersion(Constants.expoConfig?.version);
 
 export function ProfileScreen() {
   const [tab, setTab] = useState<ProfileTab>("profile");
@@ -248,6 +252,10 @@ function ProfileTab() {
           <H3>Session</H3>
           <SignOutButton />
         </YStack>
+
+        <Paragraph color="$color10" fontSize={12} pt="$4" text="center">
+          {appVersionLabel}
+        </Paragraph>
       </YStack>
     </ScrollView>
   );

@@ -77,6 +77,26 @@ bun run check-types    # per-package `tsc --noEmit` (mobile pins TypeScript ~6.0
 bun run db:migrate     # drizzle-kit migrate
 ```
 
+## Release
+
+Version lives in the root `package.json`. Bump it, then push the tag — that is the only trigger for publishing images and the APK:
+
+```bash
+bun run version:bump           # patch (0.0.0 → 0.0.1)
+bun run version:bump minor     # 0.1.0
+bun run version:bump major     # 1.0.0
+bun run version:bump 1.4.0     # exact version, must be greater than current
+bun run version:bump -- --push # also `git push` commit + tag
+```
+
+The script commits `package.json` and creates an annotated `vX.Y.Z` tag. Without `--push`:
+
+```bash
+git push origin HEAD --follow-tags
+```
+
+Tag `v*` runs **Release**: `ghcr.io/<owner>/openrouter-mobile/server` and `.../web` (semver + `latest`), and the APK on the GitHub Release. PRs / `main` only run Biome.
+
 ## Auth and RPC
 
 - Default auth is email/password. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` to switch to OIDC-only SSO. `AUTH_DISABLE_SIGNUP` disables registration. Email verification, extra OAuth providers, orgs, and 2FA are out of scope.

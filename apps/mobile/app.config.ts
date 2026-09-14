@@ -37,6 +37,34 @@ const cwd = process.cwd();
 loadEnvFile(path.resolve(cwd, ".env"));
 loadEnvFile(path.resolve(cwd, "../../.env"));
 
+const readRootVersion = (): string | undefined => {
+  const candidates = [
+    path.resolve(cwd, "package.json"),
+    path.resolve(cwd, "../../package.json"),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) {
+      continue;
+    }
+    const parsed = JSON.parse(readFileSync(candidate, "utf8")) as {
+      name?: string;
+      version?: string;
+    };
+    if (parsed.name === "openrouter-mobile" && parsed.version) {
+      return parsed.version;
+    }
+  }
+  return undefined;
+};
+
+const toAndroidVersionCode = (version: string): number => {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) {
+    return 1;
+  }
+  return Number(match[1]) * 10_000 + Number(match[2]) * 100 + Number(match[3]);
+};
+
 const baseUrl = (
   process.env.EXPO_PUBLIC_BASE_URL ??
   process.env.BASE_URL ??
@@ -45,9 +73,16 @@ const baseUrl = (
 
 process.env.EXPO_PUBLIC_BASE_URL = baseUrl;
 
+const appVersion = readRootVersion() ?? "0.0.0";
+
 export default ({ config }: ConfigContext): ExpoConfig =>
   ({
     ...config,
+    version: appVersion,
+    android: {
+      ...config.android,
+      versionCode: toAndroidVersionCode(appVersion),
+    },
     extra: {
       ...config.extra,
       baseUrl,
