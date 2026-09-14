@@ -246,7 +246,13 @@ export const listMessages = (payload: {
         })
         .pipe(Effect.mapError(unexpected));
       if (before === undefined || before === null) {
-        return new ChatMessagePage({ messages: [], hasMore: false });
+        return new ChatMessagePage({
+          messages: [],
+          hasMore: false,
+          headSeq: 0,
+          generating: false,
+          jobs: [],
+        });
       }
       cursorCreatedAt = before.createdAt;
     }
@@ -274,6 +280,9 @@ export const listMessages = (payload: {
     return new ChatMessagePage({
       messages: decoded,
       hasMore,
+      headSeq: 0,
+      generating: false,
+      jobs: [],
     });
   });
 

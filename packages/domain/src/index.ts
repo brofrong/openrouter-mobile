@@ -5,6 +5,7 @@ export * from "./CatalogModel";
 export * from "./CatalogModelPage";
 export * from "./Chat";
 export * from "./ChatMessagePage";
+export * from "./ChatStreamEvent";
 export * from "./GenerationJob";
 export * from "./ids";
 export * from "./JobEvent";
