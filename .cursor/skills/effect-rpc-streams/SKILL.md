@@ -154,6 +154,7 @@ const RpcRoutes = HttpRouter.cors({
       Layer.provide(ChatLive),
       Layer.provide(GenerationLive),
       Layer.provide(AuthMiddlewareLive),
+      Layer.provide(AuthLive),
       Layer.provide(FeatureInfra),
       Layer.provide(RpcSerialization.layerNdjson),
     ),

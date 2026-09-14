@@ -1,15 +1,36 @@
 import { chats, messages } from "@openrouter-mobile/db";
 import {
   AppError,
-  Chat,
   type ChatId,
+  type ChatKind,
+  ChatMessagePage,
+  decodeStoredContent,
+  encodeStoredContent,
   Message,
+  type MessageId,
+  type OutputModality,
+  type ReasoningEffort,
   TokenChunk,
 } from "@openrouter-mobile/domain";
 import { ChatRpcs } from "@openrouter-mobile/rpc";
-import { DateTime, Effect, Schema, Stream } from "effect";
+import { and, eq } from "drizzle-orm";
+import { DateTime, Effect, Ref, Schema, Stream } from "effect";
 import { AuthMiddleware, CurrentSession } from "../../shared/AuthMiddleware";
+import {
+  persistChatSelection,
+  requireOwnedChat,
+  toChat,
+} from "../../shared/chats";
+import {
+  sanitizeChatTitle,
+  titleSummaryMessages,
+} from "../../shared/chatTitle";
 import { AppDb } from "../../shared/db";
+import {
+  type OpenRouterUsage,
+  toOpenRouterUserContent,
+} from "../../shared/openrouter";
+import { persistUsageEvent } from "../../shared/persist-usage";
 import {
   DurableStream,
   type DurableStreamService,
@@ -18,6 +39,7 @@ import {
   OpenRouterChat,
   type OpenRouterChatService,
   type OpenRouterMessage,
+  type OpenRouterStreamPart,
 } from "./OpenRouterChat";
 
 const unexpected = (error: unknown) =>
@@ -45,6 +67,19 @@ const tokenText = (payload: unknown): string => {
     return payload.text;
   }
   return "";
+};
+
+const tokenTitle = (payload: unknown): string | undefined => {
+  if (
+    payload !== null &&
+    typeof payload === "object" &&
+    "title" in payload &&
+    typeof payload.title === "string" &&
+    payload.title.length > 0
+  ) {
+    return payload.title;
+  }
+  return undefined;
 };
 
 type GenerationErrorPayload = {
@@ -82,14 +117,6 @@ const generationErrorFromPayload = (payload: unknown): AppError | undefined => {
   });
 };
 
-const toChat = (row: typeof chats.$inferSelect) =>
-  Schema.decodeUnknownEffect(Chat)({
-    id: row.id,
-    userId: row.userId,
-    title: row.title,
-    createdAt: DateTime.fromDateUnsafe(row.createdAt),
-  }).pipe(Effect.mapError(unexpected));
-
 const toMessage = (row: typeof messages.$inferSelect) =>
   Schema.decodeUnknownEffect(Message)({
     id: row.id,
@@ -106,79 +133,173 @@ const toOpenRouterRole = (
     ? role
     : undefined;
 
-const requireOwnedChat = (chatId: string) =>
+export const listChats = (payload?: { readonly kind?: ChatKind }) =>
   Effect.gen(function* () {
     const session = yield* CurrentSession;
     const db = yield* AppDb;
-    const chat = yield* db.query.chats
-      .findFirst({
+    const rows = yield* db.query.chats
+      .findMany({
         where: {
-          id: chatId,
           userId: session.user.id,
+          ...(payload?.kind === undefined ? {} : { kind: payload.kind }),
         },
+        orderBy: { createdAt: "desc" },
       })
       .pipe(Effect.mapError(unexpected));
-    if (chat === undefined || chat === null) {
-      return yield* notFound();
-    }
-    return chat;
+    return yield* Effect.all(rows.map(toChat));
   });
 
-export const listChats = Effect.gen(function* () {
-  const session = yield* CurrentSession;
-  const db = yield* AppDb;
-  const rows = yield* db.query.chats
-    .findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: "desc" },
-    })
-    .pipe(Effect.mapError(unexpected));
-  return yield* Effect.all(rows.map(toChat));
-});
+export const createChat = (payload?: {
+  readonly kind?: ChatKind;
+  readonly model?: string;
+  readonly effort?: ReasoningEffort;
+}) =>
+  Effect.gen(function* () {
+    const session = yield* CurrentSession;
+    const db = yield* AppDb;
+    const model = payload?.model?.trim();
+    const rows = yield* db
+      .insert(chats)
+      .values({
+        userId: session.user.id,
+        kind: payload?.kind ?? "text",
+        title: "New chat",
+        ...(model === undefined || model.length === 0 ? {} : { model }),
+        ...(payload?.effort === undefined ? {} : { effort: payload.effort }),
+      })
+      .returning()
+      .pipe(Effect.mapError(unexpected));
+    const row = rows[0];
+    if (row === undefined) {
+      return yield* unexpected(new Error("Chat insert returned no row"));
+    }
+    return yield* toChat(row);
+  });
 
-export const createChat = Effect.gen(function* () {
-  const session = yield* CurrentSession;
-  const db = yield* AppDb;
-  const rows = yield* db
-    .insert(chats)
-    .values({
-      userId: session.user.id,
-      title: "New chat",
-    })
-    .returning()
-    .pipe(Effect.mapError(unexpected));
-  const row = rows[0];
-  if (row === undefined) {
-    return yield* unexpected(new Error("Chat insert returned no row"));
+export const renameChat = (payload: {
+  readonly chatId: ChatId;
+  readonly title: string;
+}) =>
+  Effect.gen(function* () {
+    const chat = yield* requireOwnedChat(payload.chatId);
+    const title = sanitizeChatTitle(payload.title);
+    if (title === undefined) {
+      return yield* new AppError({
+        code: "VALIDATION",
+        message: "Title cannot be empty",
+      });
+    }
+    const db = yield* AppDb;
+    const rows = yield* db
+      .update(chats)
+      .set({ title, titleLocked: true })
+      .where(eq(chats.id, chat.id))
+      .returning()
+      .pipe(Effect.mapError(unexpected));
+    const row = rows[0];
+    if (row === undefined) {
+      return yield* notFound();
+    }
+    return yield* toChat(row);
+  });
+
+export const setChatModel = (payload: {
+  readonly chatId: ChatId;
+  readonly model: string;
+  readonly effort?: ReasoningEffort;
+}) =>
+  persistChatSelection(payload.chatId, {
+    model: payload.model,
+    replaceEffort: true,
+    ...(payload.effort === undefined ? {} : { effort: payload.effort }),
+  });
+
+const DEFAULT_MESSAGE_LIMIT = 30;
+const MAX_MESSAGE_LIMIT = 100;
+
+export const messagePageLimit = (limit?: number): number => {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return DEFAULT_MESSAGE_LIMIT;
   }
-  return yield* toChat(row);
-});
+  return Math.min(MAX_MESSAGE_LIMIT, Math.max(1, Math.floor(limit)));
+};
 
 export const listMessages = (payload: {
   readonly chatId: ChatId;
   readonly afterSeq?: number;
+  readonly limit?: number;
+  readonly before?: MessageId;
 }) =>
   Effect.gen(function* () {
     yield* requireOwnedChat(payload.chatId);
     const db = yield* AppDb;
+    const limit = messagePageLimit(payload.limit);
+
+    let cursorCreatedAt: Date | undefined;
+    if (payload.before !== undefined) {
+      const before = yield* db.query.messages
+        .findFirst({
+          where: {
+            id: payload.before,
+            chatId: payload.chatId,
+          },
+        })
+        .pipe(Effect.mapError(unexpected));
+      if (before === undefined || before === null) {
+        return new ChatMessagePage({ messages: [], hasMore: false });
+      }
+      cursorCreatedAt = before.createdAt;
+    }
+
     const rows = yield* db.query.messages
       .findMany({
-        where: { chatId: payload.chatId },
-        orderBy: { createdAt: "asc" },
+        where:
+          cursorCreatedAt === undefined
+            ? { chatId: payload.chatId }
+            : {
+                AND: [
+                  { chatId: payload.chatId },
+                  { createdAt: { lt: cursorCreatedAt } },
+                ],
+              },
+        orderBy: { createdAt: "desc" },
+        limit: limit + 1,
       })
       .pipe(Effect.mapError(unexpected));
-    return yield* Effect.all(rows.map(toMessage));
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    page.reverse();
+    const decoded = yield* Effect.all(page.map(toMessage));
+    return new ChatMessagePage({
+      messages: decoded,
+      hasMore,
+    });
   });
+
+const isTextPart = (
+  part: OpenRouterStreamPart,
+): part is Extract<OpenRouterStreamPart, { readonly _tag: "text" }> =>
+  part._tag === "text";
 
 const tokenPayloads = (
   openrouter: OpenRouterChatService,
   outgoing: ReadonlyArray<OpenRouterMessage>,
+  usageRef: Ref.Ref<OpenRouterUsage | undefined>,
+  options?: {
+    readonly model?: string;
+    readonly effort?: ReasoningEffort;
+  },
 ) =>
   Stream.unwrap(
-    openrouter.complete(outgoing).pipe(
-      Effect.map((tokens) =>
-        tokens.pipe(
-          Stream.map((text) => ({ text })),
+    openrouter.complete(outgoing, options).pipe(
+      Effect.map((parts) =>
+        parts.pipe(
+          Stream.tap((part) =>
+            part._tag === "usage" ? Ref.set(usageRef, part.usage) : Effect.void,
+          ),
+          Stream.filter(isTextPart),
+          Stream.map((part) => ({ text: part.text })),
           Stream.catchTag("AppError", (error) =>
             Stream.succeed(generationErrorPayload(error)),
           ),
@@ -190,21 +311,51 @@ const tokenPayloads = (
     ),
   );
 
+const persistUsage = (options: {
+  readonly db: Effect.Success<typeof AppDb>;
+  readonly userId: string;
+  readonly usage: OpenRouterUsage;
+  readonly model?: string;
+}) =>
+  persistUsageEvent({
+    db: options.db,
+    userId: options.userId,
+    source: "chat",
+    usage: options.usage,
+    ...(options.model === undefined ? {} : { model: options.model }),
+  });
+
 const runGeneration = (options: {
   readonly chatId: string;
+  readonly userId: string;
   readonly outgoing: ReadonlyArray<OpenRouterMessage>;
   readonly openrouter: OpenRouterChatService;
   readonly durable: DurableStreamService;
   readonly db: Effect.Success<typeof AppDb>;
+  readonly model?: string;
+  readonly effort?: ReasoningEffort;
 }) =>
   Effect.gen(function* () {
+    const usageRef = yield* Ref.make<OpenRouterUsage | undefined>(undefined);
     const events = yield* options.durable
       .runInto(
         options.chatId,
         "token",
-        tokenPayloads(options.openrouter, options.outgoing),
+        tokenPayloads(options.openrouter, options.outgoing, usageRef, {
+          ...(options.model === undefined ? {} : { model: options.model }),
+          ...(options.effort === undefined ? {} : { effort: options.effort }),
+        }),
       )
       .pipe(Stream.runCollect);
+    const usage = yield* Ref.get(usageRef);
+    if (usage !== undefined) {
+      yield* persistUsage({
+        db: options.db,
+        userId: options.userId,
+        usage,
+        ...(options.model === undefined ? {} : { model: options.model }),
+      });
+    }
     if (events.some((event) => isGenerationErrorPayload(event.payload))) {
       return;
     }
@@ -229,12 +380,106 @@ const runGeneration = (options: {
     ),
   );
 
+const collectTitle = (parts: Stream.Stream<OpenRouterStreamPart, AppError>) =>
+  parts.pipe(
+    Stream.runFold(
+      () => ({
+        text: "",
+        usage: undefined as OpenRouterUsage | undefined,
+      }),
+      (acc, part) =>
+        part._tag === "text"
+          ? { ...acc, text: acc.text + part.text }
+          : part._tag === "usage"
+            ? { ...acc, usage: part.usage }
+            : acc,
+    ),
+  );
+
+const maybeTitleFromFirstMessage = (options: {
+  readonly chatId: string;
+  readonly userId: string;
+  readonly content: string;
+  readonly titleLocked: boolean;
+  readonly openrouter: OpenRouterChatService;
+  readonly durable: DurableStreamService;
+  readonly db: Effect.Success<typeof AppDb>;
+  readonly model?: string;
+}) =>
+  Effect.gen(function* () {
+    if (options.titleLocked) {
+      return;
+    }
+    const collected = yield* options.openrouter
+      .complete(titleSummaryMessages(options.content), {
+        ...(options.model === undefined ? {} : { model: options.model }),
+      })
+      .pipe(
+        Effect.flatMap(collectTitle),
+        Effect.catchTag("AppError", () =>
+          Effect.succeed({
+            text: "",
+            usage: undefined as OpenRouterUsage | undefined,
+          }),
+        ),
+      );
+    if (collected.usage !== undefined) {
+      yield* persistUsage({
+        db: options.db,
+        userId: options.userId,
+        usage: collected.usage,
+        ...(options.model === undefined ? {} : { model: options.model }),
+      });
+    }
+    const title = sanitizeChatTitle(collected.text);
+    if (title === undefined) {
+      return;
+    }
+    const rows = yield* options.db
+      .update(chats)
+      .set({ title })
+      .where(and(eq(chats.id, options.chatId), eq(chats.titleLocked, false)))
+      .returning()
+      .pipe(Effect.mapError(unexpected));
+    const row = rows[0];
+    if (row === undefined) {
+      return;
+    }
+    yield* options.durable
+      .append(options.chatId, "token", { text: "", title: row.title })
+      .pipe(Effect.mapError(unexpected), Effect.asVoid);
+  }).pipe(Effect.catchTag("AppError", () => Effect.void));
+
 export const sendMessage = (payload: {
   readonly chatId: ChatId;
   readonly content: string;
+  readonly model?: string;
+  readonly effort?: ReasoningEffort;
+  readonly images?: ReadonlyArray<string>;
 }) =>
   Effect.gen(function* () {
     const chat = yield* requireOwnedChat(payload.chatId);
+    if (chat.kind !== "text") {
+      return yield* new AppError({
+        code: "VALIDATION",
+        message: "Not a text chat",
+      });
+    }
+    const images = payload.images ?? [];
+    if (payload.content.trim().length === 0 && images.length === 0) {
+      return yield* new AppError({
+        code: "VALIDATION",
+        message: "Message is empty",
+      });
+    }
+    const stored = encodeStoredContent(payload.content, images);
+    if (payload.model !== undefined) {
+      yield* persistChatSelection(chat.id, {
+        model: payload.model,
+        replaceEffort: true,
+        ...(payload.effort === undefined ? {} : { effort: payload.effort }),
+      }).pipe(Effect.asVoid);
+    }
     const db = yield* AppDb;
     const openrouter = yield* OpenRouterChat;
     const durable = yield* DurableStream;
@@ -250,17 +495,17 @@ export const sendMessage = (payload: {
     for (const row of history) {
       const role = toOpenRouterRole(row.role);
       if (role !== undefined) {
-        outgoing.push({ role, content: row.content });
+        outgoing.push({ role, content: toOpenRouterUserContent(row.content) });
       }
     }
-    outgoing.push({ role: "user", content: payload.content });
+    outgoing.push({ role: "user", content: toOpenRouterUserContent(stored) });
 
     const inserted = yield* db
       .insert(messages)
       .values({
         chatId: chat.id,
         role: "user",
-        content: payload.content,
+        content: stored,
       })
       .returning()
       .pipe(Effect.mapError(unexpected));
@@ -269,17 +514,52 @@ export const sendMessage = (payload: {
       return yield* unexpected(new Error("Message insert returned no row"));
     }
 
+    if (history.length === 0) {
+      yield* Effect.forkDetach(
+        maybeTitleFromFirstMessage({
+          chatId: chat.id,
+          userId: chat.userId,
+          content: decodeStoredContent(stored).text,
+          titleLocked: chat.titleLocked,
+          openrouter,
+          durable,
+          db,
+          ...(payload.model === undefined ? {} : { model: payload.model }),
+        }),
+      );
+    }
+
     yield* Effect.forkDetach(
       runGeneration({
         chatId: chat.id,
+        userId: chat.userId,
         outgoing,
         openrouter,
         durable,
         db,
+        ...(payload.model === undefined ? {} : { model: payload.model }),
+        ...(payload.effort === undefined ? {} : { effort: payload.effort }),
       }),
     );
 
     return yield* toMessage(userRow);
+  });
+
+export const listModels = (payload: {
+  readonly query?: string;
+  readonly offset?: number;
+  readonly limit?: number;
+  readonly outputModality: OutputModality;
+}) =>
+  Effect.gen(function* () {
+    const openrouter = yield* OpenRouterChat;
+    const query = payload.query?.trim();
+    return yield* openrouter.listModels({
+      offset: payload.offset ?? 0,
+      limit: messagePageLimit(payload.limit),
+      outputModality: payload.outputModality,
+      ...(query === undefined || query.length === 0 ? {} : { query }),
+    });
   });
 
 export const subscribeTokens = (chatId: ChatId, afterSeq?: number) =>
@@ -292,12 +572,20 @@ export const subscribeTokens = (chatId: ChatId, afterSeq?: number) =>
         Stream.mapEffect((event) => {
           const failure = generationErrorFromPayload(event.payload);
           if (failure !== undefined) {
-            return Effect.fail(failure);
+            return Effect.succeed(
+              new TokenChunk({
+                seq: event.seq,
+                text: tokenText(event.payload),
+                error: failure.message,
+              }),
+            );
           }
+          const title = tokenTitle(event.payload);
           return Effect.succeed(
             new TokenChunk({
               seq: event.seq,
               text: tokenText(event.payload),
+              ...(title === undefined ? {} : { title }),
             }),
           );
         }),
@@ -314,9 +602,12 @@ export const subscribeTokens = (chatId: ChatId, afterSeq?: number) =>
   );
 
 export const ChatLive = ChatRpcs.middleware(AuthMiddleware).toLayer({
-  ChatList: () => listChats,
-  ChatCreate: () => createChat,
+  ChatList: (payload) => listChats(payload),
+  ChatCreate: (payload) => createChat(payload),
+  ChatSetModel: (payload) => setChatModel(payload),
+  ChatRename: (payload) => renameChat(payload),
   ChatMessages: (payload) => listMessages(payload),
   ChatSend: (payload) => sendMessage(payload),
   ChatSubscribe: (payload) => subscribeTokens(payload.chatId, payload.afterSeq),
+  ModelsList: (payload) => listModels(payload),
 });

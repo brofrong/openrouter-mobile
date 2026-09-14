@@ -2,14 +2,17 @@ import { BunHttpServer } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { AiConfigLive } from "../features/ai-config/AiConfigLive";
 import { ChatLive } from "../features/chat/ChatLive";
 import { OpenRouterChatLive } from "../features/chat/OpenRouterChat";
 import { DurableStreamLive } from "../features/durable-stream/DurableStreamLive";
 import { GenerationLive } from "../features/generation/GenerationLive";
 import { OpenRouterMediaLive } from "../features/generation/OpenRouterMedia";
 import { HealthLive } from "../features/health/HealthLive";
+import { UsageLive } from "../features/usage/UsageLive";
 import { AuthHttpLive } from "../shared/AuthHttp";
 import { AuthMiddlewareLive } from "../shared/AuthMiddleware";
+import { AuthLive } from "../shared/auth";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
 import { corsAllowedOrigins } from "../shared/origins";
@@ -43,7 +46,10 @@ const RpcRoutes = HttpRouter.cors({
       Layer.provide(HealthLive),
       Layer.provide(ChatLive),
       Layer.provide(GenerationLive),
+      Layer.provide(UsageLive),
+      Layer.provide(AiConfigLive),
       Layer.provide(AuthMiddlewareLive),
+      Layer.provide(AuthLive),
       Layer.provide(FeatureInfra),
       Layer.provide(RpcSerialization.layerNdjson),
     ),
@@ -63,6 +69,6 @@ const HttpLive = Layer.unwrap(
   ),
 );
 
-const Main = Layer.mergeAll(HttpLive, DbLive);
+const Main = HttpLive.pipe(Layer.provide(AuthLive), Layer.provideMerge(DbLive));
 
 BunRuntime.runMain(Layer.launch(Main));

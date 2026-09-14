@@ -1,0 +1,1 @@
+CREATE INDEX "usage_events_user_id_created_at" ON "usage_events" ("user_id","created_at");

@@ -114,7 +114,7 @@ import { Config, Redacted } from "effect"
 
 Config.Redacted("DATABASE_URL")
 Config.Port("PORT").pipe(Config.withDefault(3000))
-Config.all({ databaseUrl, port })
+Config.all({ databaseUrl, port, betterAuthUrl })
 ```
 
 Better Auth (`better-auth@1.7.4`): `betterAuth` from `"better-auth"` in `apps/server/src/shared/auth.ts`, `drizzleAdapter` from `"@better-auth/drizzle-adapter/relations-v2"`, `expo` from `"@better-auth/expo"`. RPC middleware is `RpcMiddleware.Service` from `"effect/unstable/rpc"`. Session: `auth.api.getSession({ headers })`. See `.cursor/skills/better-auth/SKILL.md`.

@@ -15,7 +15,7 @@ Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@
 - WebSocket: `binaryType = "arraybuffer"` (`apps/mobile/src/shared/ws.ts`)
 
 ## Do not
-- Nested `File` in RPC payloads (no HTTP upload route; media jobs are stubs; `AudioTranscribe` takes a string `assetId`)
+- Nested `File` in RPC payloads (no HTTP upload route; `AudioGenerate` takes a text prompt)
 - Import `apps/server` from `apps/mobile`
 - Install TanStack Query
 - Force root TypeScript 7 onto the Expo app
@@ -69,10 +69,10 @@ UI primitives from `tamagui`: `YStack`, `XStack`, `H1`/`H2`, `Paragraph`, `Text`
 | `apps/mobile/src/app/sign-up.tsx` | Email/password sign-up |
 | `apps/mobile/src/app/(tabs)/_layout.tsx` | Tabs: Chat, Images, Video, Speech, Audio + sign-out |
 | `apps/mobile/src/app/(tabs)/index.tsx` | Chat (`ChatScreen`) |
-| `apps/mobile/src/app/(tabs)/images.tsx` | Images (`GenerationPanel`, stub job URL) |
-| `apps/mobile/src/app/(tabs)/video.tsx` | Video (`GenerationPanel`, stub job URL) |
-| `apps/mobile/src/app/(tabs)/speech.tsx` | Speech (`GenerationPanel`, stub job URL) |
-| `apps/mobile/src/app/(tabs)/audio.tsx` | Audio (`GenerationPanel`, stub job URL) |
+| `apps/mobile/src/app/(tabs)/images.tsx` | Images (`ImagesScreen` chats + generated image thread) |
+| `apps/mobile/src/app/(tabs)/video.tsx` | Video (`MediaChatScreen` chats + generated video thread) |
+| `apps/mobile/src/app/(tabs)/speech.tsx` | Speech (`MediaChatScreen` chats + synthesized audio thread) |
+| `apps/mobile/src/app/(tabs)/audio.tsx` | Audio (`MediaChatScreen` chats + generated music thread) |
 | `apps/mobile/tamagui.config.ts` | `createTamagui` config |
 | `apps/mobile/app.json` | `scheme: "openrouter-mobile"` |
 

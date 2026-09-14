@@ -1,6 +1,8 @@
-import { generationJobs } from "@openrouter-mobile/db";
+import { chats, generationJobs, messages } from "@openrouter-mobile/db";
 import {
   AppError,
+  type ChatId,
+  encodeStoredContent,
   GenerationJob,
   type GenerationJobId,
   JobEvent,
@@ -9,7 +11,11 @@ import { JobRpcs, MediaRpcs } from "@openrouter-mobile/rpc";
 import { eq } from "drizzle-orm";
 import { Cause, DateTime, Effect, Schema, Stream } from "effect";
 import { AuthMiddleware, CurrentSession } from "../../shared/AuthMiddleware";
+import { persistChatSelection, requireOwnedChatKind } from "../../shared/chats";
+import { sanitizeChatTitle } from "../../shared/chatTitle";
 import { AppDb } from "../../shared/db";
+import type { OpenRouterUsage } from "../../shared/openrouter";
+import { persistUsageEvent } from "../../shared/persist-usage";
 import {
   DurableStream,
   type DurableStreamService,
@@ -140,10 +146,33 @@ const persistFailure = (options: {
     });
   }).pipe(Effect.asVoid);
 
+const zeroUsage: OpenRouterUsage = {
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+  costUsd: 0,
+};
+
+const trackedMediaSource = (
+  kind: MediaKind,
+): "image" | "video" | "speech" | "audio" => kind;
+
 const runGeneration = (options: {
   readonly jobId: string;
+  readonly userId: string;
   readonly kind: MediaKind;
   readonly prompt: string;
+  readonly chatId?: string;
+  readonly model?: string;
+  readonly aspectRatio?: string;
+  readonly resolution?: string;
+  readonly quality?: string;
+  readonly background?: string;
+  readonly n?: number;
+  readonly duration?: number;
+  readonly generateAudio?: boolean;
+  readonly inputReferences?: ReadonlyArray<string>;
+  readonly voice?: string;
   readonly db: Effect.Success<typeof AppDb>;
   readonly durable: DurableStreamService;
   readonly media: OpenRouterMediaService;
@@ -171,6 +200,28 @@ const runGeneration = (options: {
         kind: options.kind,
         prompt: options.prompt,
         jobId: options.jobId,
+        ...(options.model === undefined ? {} : { model: options.model }),
+        ...(options.aspectRatio === undefined
+          ? {}
+          : { aspectRatio: options.aspectRatio }),
+        ...(options.resolution === undefined
+          ? {}
+          : { resolution: options.resolution }),
+        ...(options.quality === undefined ? {} : { quality: options.quality }),
+        ...(options.background === undefined
+          ? {}
+          : { background: options.background }),
+        ...(options.n === undefined ? {} : { n: options.n }),
+        ...(options.duration === undefined
+          ? {}
+          : { duration: options.duration }),
+        ...(options.generateAudio === undefined
+          ? {}
+          : { generateAudio: options.generateAudio }),
+        ...(options.inputReferences === undefined
+          ? {}
+          : { inputReferences: options.inputReferences }),
+        ...(options.voice === undefined ? {} : { voice: options.voice }),
       })
       .pipe(
         Effect.mapError(toAppError),
@@ -182,14 +233,32 @@ const runGeneration = (options: {
       return;
     }
 
+    yield* persistUsageEvent({
+      db: options.db,
+      userId: options.userId,
+      source: trackedMediaSource(options.kind),
+      usage: result.usage ?? zeroUsage,
+      ...(options.model === undefined ? {} : { model: options.model }),
+    });
+
     yield* options.db
       .update(generationJobs)
       .set({
         status: "completed",
-        resultUrl: result.url,
+        resultUrl: result.url.split("\n")[0] ?? result.url,
       })
       .where(eq(generationJobs.id, options.jobId))
       .pipe(Effect.mapError(unexpected), Effect.asVoid);
+    if (options.chatId !== undefined) {
+      yield* options.db
+        .insert(messages)
+        .values({
+          chatId: options.chatId,
+          role: "assistant",
+          content: result.url,
+        })
+        .pipe(Effect.mapError(unexpected), Effect.asVoid);
+    }
     yield* appendJobEvent(options.durable, options.jobId, {
       status: "completed",
       url: result.url,
@@ -201,7 +270,21 @@ const runGeneration = (options: {
   );
 };
 
-const startJob = (kind: MediaKind, prompt: string) =>
+const startJob = (options: {
+  readonly kind: MediaKind;
+  readonly prompt: string;
+  readonly chatId?: string;
+  readonly model?: string;
+  readonly aspectRatio?: string;
+  readonly resolution?: string;
+  readonly quality?: string;
+  readonly background?: string;
+  readonly n?: number;
+  readonly duration?: number;
+  readonly generateAudio?: boolean;
+  readonly inputReferences?: ReadonlyArray<string>;
+  readonly voice?: string;
+}) =>
   Effect.gen(function* () {
     const session = yield* CurrentSession;
     const db = yield* AppDb;
@@ -212,9 +295,9 @@ const startJob = (kind: MediaKind, prompt: string) =>
       .insert(generationJobs)
       .values({
         userId: session.user.id,
-        kind,
+        kind: options.kind,
         status: "queued",
-        prompt,
+        prompt: options.prompt,
       })
       .returning()
       .pipe(Effect.mapError(unexpected));
@@ -228,11 +311,35 @@ const startJob = (kind: MediaKind, prompt: string) =>
     yield* Effect.forkDetach(
       runGeneration({
         jobId: row.id,
-        kind,
-        prompt,
+        userId: session.user.id,
+        kind: options.kind,
+        prompt: options.prompt,
         db,
         durable,
         media,
+        ...(options.chatId === undefined ? {} : { chatId: options.chatId }),
+        ...(options.model === undefined ? {} : { model: options.model }),
+        ...(options.aspectRatio === undefined
+          ? {}
+          : { aspectRatio: options.aspectRatio }),
+        ...(options.resolution === undefined
+          ? {}
+          : { resolution: options.resolution }),
+        ...(options.quality === undefined ? {} : { quality: options.quality }),
+        ...(options.background === undefined
+          ? {}
+          : { background: options.background }),
+        ...(options.n === undefined ? {} : { n: options.n }),
+        ...(options.duration === undefined
+          ? {}
+          : { duration: options.duration }),
+        ...(options.generateAudio === undefined
+          ? {}
+          : { generateAudio: options.generateAudio }),
+        ...(options.inputReferences === undefined
+          ? {}
+          : { inputReferences: options.inputReferences }),
+        ...(options.voice === undefined ? {} : { voice: options.voice }),
       }),
     );
 
@@ -265,19 +372,174 @@ export const subscribeJob = (jobId: GenerationJobId, afterSeq?: number) =>
     }),
   );
 
-export const generateImage = (payload: { readonly prompt: string }) =>
-  startJob("image", payload.prompt);
+const generateInChat = (options: {
+  readonly kind: MediaKind;
+  readonly chatId: ChatId;
+  readonly prompt: string;
+  readonly model?: string;
+  readonly aspectRatio?: string;
+  readonly resolution?: string;
+  readonly quality?: string;
+  readonly background?: string;
+  readonly n?: number;
+  readonly duration?: number;
+  readonly generateAudio?: boolean;
+  readonly inputReferences?: ReadonlyArray<string>;
+  readonly voice?: string;
+}) =>
+  Effect.gen(function* () {
+    const chat = yield* requireOwnedChatKind(options.chatId, options.kind);
+    if (options.model !== undefined) {
+      yield* persistChatSelection(chat.id, { model: options.model }).pipe(
+        Effect.asVoid,
+      );
+    }
+    const db = yield* AppDb;
+    const durable = yield* DurableStream;
+    const history = yield* db.query.messages
+      .findMany({
+        where: { chatId: chat.id },
+      })
+      .pipe(Effect.mapError(unexpected));
+    yield* db
+      .insert(messages)
+      .values({
+        chatId: chat.id,
+        role: "user",
+        content: encodeStoredContent(
+          options.prompt,
+          options.inputReferences ?? [],
+        ),
+      })
+      .pipe(Effect.mapError(unexpected), Effect.asVoid);
 
-export const generateVideo = (payload: { readonly prompt: string }) =>
-  startJob("video", payload.prompt);
+    if (history.length === 0 && !chat.titleLocked) {
+      const title = sanitizeChatTitle(options.prompt);
+      if (title !== undefined) {
+        const rows = yield* db
+          .update(chats)
+          .set({ title })
+          .where(eq(chats.id, chat.id))
+          .returning()
+          .pipe(Effect.mapError(unexpected));
+        if (rows[0] !== undefined) {
+          yield* durable
+            .append(chat.id, "token", { text: "", title })
+            .pipe(Effect.mapError(unexpected), Effect.asVoid);
+        }
+      }
+    }
+
+    return yield* startJob({
+      kind: options.kind,
+      prompt: options.prompt,
+      chatId: chat.id,
+      ...(options.model === undefined ? {} : { model: options.model }),
+      ...(options.aspectRatio === undefined
+        ? {}
+        : { aspectRatio: options.aspectRatio }),
+      ...(options.resolution === undefined
+        ? {}
+        : { resolution: options.resolution }),
+      ...(options.quality === undefined ? {} : { quality: options.quality }),
+      ...(options.background === undefined
+        ? {}
+        : { background: options.background }),
+      ...(options.n === undefined ? {} : { n: options.n }),
+      ...(options.duration === undefined ? {} : { duration: options.duration }),
+      ...(options.generateAudio === undefined
+        ? {}
+        : { generateAudio: options.generateAudio }),
+      ...(options.inputReferences === undefined
+        ? {}
+        : { inputReferences: options.inputReferences }),
+      ...(options.voice === undefined ? {} : { voice: options.voice }),
+    });
+  });
+
+export const generateImage = (payload: {
+  readonly chatId: ChatId;
+  readonly prompt: string;
+  readonly model?: string;
+  readonly aspectRatio?: string;
+  readonly resolution?: string;
+  readonly quality?: string;
+  readonly background?: string;
+  readonly n?: number;
+  readonly inputReferences?: ReadonlyArray<string>;
+}) =>
+  generateInChat({
+    kind: "image",
+    chatId: payload.chatId,
+    prompt: payload.prompt,
+    ...(payload.model === undefined ? {} : { model: payload.model }),
+    ...(payload.aspectRatio === undefined
+      ? {}
+      : { aspectRatio: payload.aspectRatio }),
+    ...(payload.resolution === undefined
+      ? {}
+      : { resolution: payload.resolution }),
+    ...(payload.quality === undefined ? {} : { quality: payload.quality }),
+    ...(payload.background === undefined
+      ? {}
+      : { background: payload.background }),
+    ...(payload.n === undefined ? {} : { n: payload.n }),
+    ...(payload.inputReferences === undefined
+      ? {}
+      : { inputReferences: payload.inputReferences }),
+  });
+
+export const generateVideo = (payload: {
+  readonly chatId: ChatId;
+  readonly prompt: string;
+  readonly model?: string;
+  readonly aspectRatio?: string;
+  readonly resolution?: string;
+  readonly duration?: number;
+  readonly generateAudio?: boolean;
+}) =>
+  generateInChat({
+    kind: "video",
+    chatId: payload.chatId,
+    prompt: payload.prompt,
+    ...(payload.model === undefined ? {} : { model: payload.model }),
+    ...(payload.aspectRatio === undefined
+      ? {}
+      : { aspectRatio: payload.aspectRatio }),
+    ...(payload.resolution === undefined
+      ? {}
+      : { resolution: payload.resolution }),
+    ...(payload.duration === undefined ? {} : { duration: payload.duration }),
+    ...(payload.generateAudio === undefined
+      ? {}
+      : { generateAudio: payload.generateAudio }),
+  });
 
 export const synthesizeSpeech = (payload: {
+  readonly chatId: ChatId;
   readonly text: string;
+  readonly model?: string;
   readonly voice?: string;
-}) => startJob("speech", payload.text);
+}) =>
+  generateInChat({
+    kind: "speech",
+    chatId: payload.chatId,
+    prompt: payload.text,
+    ...(payload.model === undefined ? {} : { model: payload.model }),
+    ...(payload.voice === undefined ? {} : { voice: payload.voice }),
+  });
 
-export const transcribeAudio = (payload: { readonly assetId: string }) =>
-  startJob("audio", payload.assetId);
+export const generateAudio = (payload: {
+  readonly chatId: ChatId;
+  readonly prompt: string;
+  readonly model?: string;
+}) =>
+  generateInChat({
+    kind: "audio",
+    chatId: payload.chatId,
+    prompt: payload.prompt,
+    ...(payload.model === undefined ? {} : { model: payload.model }),
+  });
 
 export const GenerationLive = JobRpcs.merge(MediaRpcs)
   .middleware(AuthMiddleware)
@@ -287,5 +549,5 @@ export const GenerationLive = JobRpcs.merge(MediaRpcs)
     ImageGenerate: (payload) => generateImage(payload),
     VideoGenerate: (payload) => generateVideo(payload),
     SpeechSynthesize: (payload) => synthesizeSpeech(payload),
-    AudioTranscribe: (payload) => transcribeAudio(payload),
+    AudioGenerate: (payload) => generateAudio(payload),
   });

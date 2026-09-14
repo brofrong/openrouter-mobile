@@ -27,7 +27,7 @@ Chat uses the real OpenRouter API. Image / video / speech / audio jobs are **stu
 ## Setup
 
 ```bash
-cp .env.example .env   # BETTER_AUTH_SECRET, OPENROUTER_API_KEY, BETTER_AUTH_URL
+cp .env.example .env   # OPENROUTER_API_KEY, BETTER_AUTH_URL
 docker compose up -d
 bun install
 bun run db:migrate
@@ -61,7 +61,6 @@ Copy `.env.example` to `.env`. Required / used vars:
 | --- | --- | --- |
 | `DATABASE_URL` | server, db | Default `postgres://openrouter:openrouter@localhost:5432/openrouter` |
 | `OPENROUTER_API_KEY` | server only | Chat streaming. Missing key → chat send fails; media stubs still work. |
-| `BETTER_AUTH_SECRET` | server | ≥32 characters. Required. |
 | `BETTER_AUTH_URL` | server | Public origin of the auth/RPC server (must match `PORT`). |
 | `PORT` | server | HTTP listen port, default `3000`. |
 | `EXPO_PUBLIC_AUTH_URL` | mobile | Better Auth base URL (`/api/auth/*`). |

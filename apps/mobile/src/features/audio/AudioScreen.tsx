@@ -1,13 +1,16 @@
-import { GenerationPanel } from "../../shared/ui/GenerationPanel";
+import { MediaChatScreen } from "../../entities/chat/MediaChatScreen";
 
 export function AudioScreen() {
   return (
-    <GenerationPanel
-      title="Audio"
-      description="Transcribe an audio asset. Pass an asset id from a prior upload."
-      inputLabel="Asset ID"
-      submitLabel="Transcribe"
+    <MediaChatScreen
       kind="audio"
+      defaultTitle="Audio"
+      emptyHint="Describe a track to start a new chat."
+      threadEmptyHint="Describe the music you want."
+      composerPlaceholder="A lo-fi beat with warm piano"
+      submitLabel="Generate"
+      generatingLabel="Generating music…"
+      resultKind="audio"
     />
   );
 }

@@ -12,7 +12,7 @@ alwaysApply: false
 - Server plugin: `expo()` from `@better-auth/expo`
 - Mount `auth.handler` on GET+POST `/api/auth/*` (HTTP, not Effect RPC)
 - Email/password enabled; do not require email verification for MVP
-- Env: `BETTER_AUTH_SECRET` (>=32 chars), `BETTER_AUTH_URL`
+- Env: Better Auth secret is generated on first boot into Postgres `kv`. `BETTER_AUTH_URL` remains an env var.
 - Expo: `createAuthClient` from `better-auth/react` + `expoClient` + `expo-secure-store`
 - RPC: `headers: { Cookie: await authClient.getCookie() }`, `credentials: "omit"` on native
 - Session: `auth.api.getSession({ headers: requestHeaders })`

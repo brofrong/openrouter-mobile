@@ -2,7 +2,7 @@ import { AppError } from "@openrouter-mobile/domain";
 import { Context, Effect, Layer } from "effect";
 import type { Headers } from "effect/unstable/http/Headers";
 import { RpcMiddleware } from "effect/unstable/rpc";
-import { auth, type Session } from "./auth";
+import { Auth, type Session } from "./auth";
 
 export class CurrentSession extends Context.Service<CurrentSession, Session>()(
   "@openrouter-mobile/server/CurrentSession",
@@ -33,17 +33,20 @@ const toWebHeaders = (headers: Headers): globalThis.Headers => {
   return webHeaders;
 };
 
-export const AuthMiddlewareLive = Layer.succeed(
+export const AuthMiddlewareLive = Layer.effect(
   AuthMiddleware,
-  (effect, { headers }) =>
-    Effect.tryPromise({
-      try: () => auth.api.getSession({ headers: toWebHeaders(headers) }),
-      catch: () => unauthorized(),
-    }).pipe(
-      Effect.flatMap((session) =>
-        session
-          ? Effect.provideService(effect, CurrentSession, session)
-          : Effect.fail(unauthorized()),
-      ),
-    ),
+  Effect.gen(function* () {
+    const auth = yield* Auth;
+    return (effect, { headers }) =>
+      Effect.tryPromise({
+        try: () => auth.api.getSession({ headers: toWebHeaders(headers) }),
+        catch: () => unauthorized(),
+      }).pipe(
+        Effect.flatMap((session) =>
+          session
+            ? Effect.provideService(effect, CurrentSession, session)
+            : Effect.fail(unauthorized()),
+        ),
+      );
+  }),
 );

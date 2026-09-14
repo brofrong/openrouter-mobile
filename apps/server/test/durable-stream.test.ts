@@ -10,9 +10,6 @@ if (process.env.DATABASE_URL === undefined) {
   process.env.DATABASE_URL =
     "postgres://openrouter:openrouter@localhost:5432/openrouter";
 }
-if (process.env.BETTER_AUTH_SECRET === undefined) {
-  process.env.BETTER_AUTH_SECRET = "test-secret-that-is-at-least-32-chars-long";
-}
 
 const TestLive = DurableStreamLive.pipe(Layer.provideMerge(DbLive));
 

@@ -25,6 +25,20 @@ export const appRelations = defineRelations(schema, (r) => ({
       optional: false,
     }),
   },
+  usageEvents: {
+    user: r.one.user({
+      from: r.usageEvents.userId,
+      to: r.user.id,
+      optional: false,
+    }),
+  },
+  userAiConfigs: {
+    user: r.one.user({
+      from: r.userAiConfigs.userId,
+      to: r.user.id,
+      optional: false,
+    }),
+  },
 }));
 
 export const relations = { ...appRelations, ...authRelations };

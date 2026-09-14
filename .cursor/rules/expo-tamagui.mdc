@@ -14,7 +14,7 @@ alwaysApply: false
 - WebSocket: `binaryType = "arraybuffer"`
 
 ## Do not
-- Nested `File` in RPC payloads (no HTTP upload route; media jobs are stubs; `AudioTranscribe` takes a string `assetId`)
+- Nested `File` in RPC payloads (no HTTP upload route; `AudioGenerate` takes a text prompt)
 - Import `apps/server` from the mobile app
 
 Read `.cursor/skills/expo-tamagui/SKILL.md`.

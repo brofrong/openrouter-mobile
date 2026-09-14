@@ -6,6 +6,7 @@ export class AppError extends Schema.TaggedError<AppError>()("AppError", {
     "NOT_FOUND",
     "OPENROUTER",
     "STREAM_GONE",
+    "VALIDATION",
   ]),
   message: Schema.String,
 }) {}

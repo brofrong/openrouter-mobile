@@ -14,6 +14,8 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { expo } from "@better-auth/expo"
 import { betterAuth } from "better-auth"
 import { account, createAuthDb, session, user, verification } from "@openrouter-mobile/db"
+import { Context, Effect, Layer } from "effect"
+import { getOrCreateKv } from "./kv"
 import { trustedOrigins } from "./origins"
 
 const databaseUrl =
@@ -22,26 +24,40 @@ const databaseUrl =
 
 const db = createAuthDb(databaseUrl)
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: { user, session, account, verification },
-  }),
-  emailAndPassword: { enabled: true }, // do NOT set requireEmailVerification
-  plugins: [expo()],
-  trustedOrigins: [...trustedOrigins], // origins.ts is ReadonlyArray; Better Auth wants string[]
-})
+export const createAuth = (secret: string) =>
+  betterAuth({
+    secret,
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: { user, session, account, verification },
+    }),
+    emailAndPassword: { enabled: true }, // do NOT set requireEmailVerification
+    plugins: [expo()],
+    trustedOrigins: [...trustedOrigins], // origins.ts is ReadonlyArray; Better Auth wants string[]
+  })
 
-export type Session = typeof auth.$Infer.Session
+export type Session = ReturnType<typeof createAuth>["$Infer"]["Session"]
+
+export class Auth extends Context.Service<Auth, ReturnType<typeof createAuth>>()(
+  "@openrouter-mobile/server/Auth",
+) {}
+
+export const AuthLive = Layer.effect(
+  Auth,
+  Effect.gen(function* () {
+    const secret = yield* getOrCreateKv("better_auth_secret", generateBetterAuthSecret)
+    return createAuth(secret)
+  }),
+)
 ```
 
 - `trustedOrigins` and RPC CORS share `apps/server/src/shared/origins.ts` (Expo web 8081/8082/19006 + `openrouter-mobile://` / `exp://`).
 - Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2` (NOT `better-auth/adapters/drizzle`, NOT `@better-auth/drizzle-adapter` default/v1).
 - Server plugin: `expo()` from `@better-auth/expo`.
 - Classic Drizzle client only: `createAuthDb` in `packages/db/src/client.ts` uses `drizzle-orm/postgres-js` + `postgres`. Effect `PgDrizzle` is not accepted by the adapter. `drizzle-orm/bun-sql` fails under `bun x auth generate` (CLI loads config with Node/jiti; `bun` is not resolvable).
-- Mount `auth.handler` on the same Effect `HttpRouter` as RPC in `apps/server/src/shared/AuthHttp.ts` (`HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
+- Mount `auth.handler` on the same Effect `HttpRouter` as RPC in `apps/server/src/shared/AuthHttp.ts` (`Layer.unwrap` + `yield* Auth`, then `HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
 - Email/password enabled; do not require email verification for MVP.
-- Env: `BETTER_AUTH_SECRET` (>=32 chars), `BETTER_AUTH_URL`. Read by Better Auth from `process.env` (Bun `.env`). `AppConfig` also requires `BETTER_AUTH_SECRET`.
+- Better Auth `secret` is generated on first boot into Postgres `kv` (key `better_auth_secret`). `BETTER_AUTH_URL` remains an env var. Optional leftover `BETTER_AUTH_SECRET` is copied into `kv` once if the row is missing.
 
 ## Schema + relations
 
@@ -71,7 +87,7 @@ import { AppError } from "@openrouter-mobile/domain"
 import { Context, Effect, Layer } from "effect"
 import type { Headers } from "effect/unstable/http/Headers"
 import { RpcMiddleware } from "effect/unstable/rpc"
-import { auth, type Session } from "./auth"
+import { Auth, type Session } from "./auth"
 
 export class CurrentSession extends Context.Service<CurrentSession, Session>()(
   "@openrouter-mobile/server/CurrentSession",
@@ -92,19 +108,22 @@ const toWebHeaders = (headers: Headers): globalThis.Headers => {
   return webHeaders
 }
 
-export const AuthMiddlewareLive = Layer.succeed(
+export const AuthMiddlewareLive = Layer.effect(
   AuthMiddleware,
-  (effect, { headers }) =>
-    Effect.tryPromise({
-      try: () => auth.api.getSession({ headers: toWebHeaders(headers) }),
-      catch: () => unauthorized(),
-    }).pipe(
-      Effect.flatMap((session) =>
-        session
-          ? Effect.provideService(effect, CurrentSession, session)
-          : Effect.fail(unauthorized()),
-      ),
-    ),
+  Effect.gen(function* () {
+    const auth = yield* Auth
+    return (effect, { headers }) =>
+      Effect.tryPromise({
+        try: () => auth.api.getSession({ headers: toWebHeaders(headers) }),
+        catch: () => unauthorized(),
+      }).pipe(
+        Effect.flatMap((session) =>
+          session
+            ? Effect.provideService(effect, CurrentSession, session)
+            : Effect.fail(unauthorized()),
+        ),
+      )
+  }),
 )
 ```
 
