@@ -1,5 +1,6 @@
 export * from "./AiConfig";
 export * from "./AppError";
+export * from "./AuthSettings";
 export * from "./CatalogModel";
 export * from "./CatalogModelPage";
 export * from "./Chat";

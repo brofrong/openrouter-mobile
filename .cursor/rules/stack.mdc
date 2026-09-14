@@ -10,4 +10,4 @@ Do not add tRPC, oRPC, REST routers (except Better Auth `/api/auth/*`), Zod, Pri
 If Effect usage is unclear, open `.cursor/skills/effect-this-repo/SKILL.md` before writing code.
 If auth usage is unclear, open `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skills at `.cursor/skills/better-auth-official/`.
 
-MVP auth: email/password only. Do not require email verification; do not add OAuth, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.
+Default auth: email/password. Optional OIDC SSO via env (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) becomes the only sign-in. `AUTH_DISABLE_SIGNUP` disables registration. Do not require email verification; do not add extra OAuth providers, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.

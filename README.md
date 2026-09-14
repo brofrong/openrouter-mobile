@@ -1,6 +1,6 @@
 # OpenRouter Mobile
 
-Expo + Tamagui client talking to OpenRouter through a Bun + Effect v4 RPC server. Auth is Better Auth (email/password). The app API is Effect RPC only — not tRPC, oRPC, or REST (except Better Auth `/api/auth/*`).
+Expo + Tamagui client talking to OpenRouter through a Bun + Effect v4 RPC server. Auth is Better Auth (email/password, or OIDC SSO when configured). The app API is Effect RPC only — not tRPC, oRPC, or REST (except Better Auth `/api/auth/*`).
 
 ## Stack
 
@@ -10,7 +10,7 @@ Expo + Tamagui client talking to OpenRouter through a Bun + Effect v4 RPC server
 | RPC | `effect/unstable/rpc` (`@effect/rpc` is not published on Effect 4 rc) |
 | HTTP | `effect/unstable/http` (`HttpRouter`) |
 | Server | Bun, Effect v4, `BunHttpServer` / `BunRuntime` from `@effect/platform-bun` |
-| Auth | Better Auth 1.7.4 email/password, `@better-auth/expo`, `@better-auth/drizzle-adapter/relations-v2` |
+| Auth | Better Auth 1.7.4 email/password or OIDC SSO, `@better-auth/expo`, `@better-auth/drizzle-adapter/relations-v2` |
 | DB | PostgreSQL, `drizzle-orm@1.0.0-rc.5-ab785fc`, Relational Queries v2 (`defineRelations`) |
 | Lint / format | Biome (`bun run check` / `bun run check:fix`). Not ESLint or Prettier. |
 
@@ -27,7 +27,7 @@ Chat uses the real OpenRouter API. Image / video / speech / audio jobs are **stu
 ## Setup
 
 ```bash
-cp .env.example .env   # OPENROUTER_API_KEY, BETTER_AUTH_URL
+cp .env.example .env   # OPENROUTER_API_KEY, BASE_URL
 docker compose up -d
 bun install
 bun run db:migrate
@@ -39,15 +39,13 @@ Root `bun run dev` is Turbo (Expo `start` + server `--watch`). Smoke wants `mobi
 
 ### Port 3000
 
-The server defaults to `PORT=3000` and hostname `0.0.0.0`. If 3000 is already taken, pick a free port and keep auth + RPC URLs in sync:
+The server defaults to `PORT=3000` and hostname `0.0.0.0`. If 3000 is already taken, pick a free port and point `BASE_URL` at it. Auth (`/api/auth/*`), RPC HTTP (`/rpc`), and RPC WebSocket (`/rpc/ws`) are derived from that origin:
 
 ```bash
-PORT=3010 BETTER_AUTH_URL=http://localhost:3010 \
+PORT=3010 BASE_URL=http://localhost:3010 \
   bun run --filter @openrouter-mobile/server start
 
-EXPO_PUBLIC_AUTH_URL=http://localhost:3010 \
-EXPO_PUBLIC_RPC_HTTP_URL=http://localhost:3010/rpc \
-EXPO_PUBLIC_RPC_WS_URL=ws://localhost:3010/rpc/ws \
+BASE_URL=http://localhost:3010 \
   bun run --filter @openrouter-mobile/mobile web
 ```
 
@@ -61,12 +59,14 @@ Copy `.env.example` to `.env`. Required / used vars:
 | --- | --- | --- |
 | `DATABASE_URL` | server, db | Default `postgres://openrouter:openrouter@localhost:5432/openrouter` |
 | `OPENROUTER_API_KEY` | server only | Chat streaming. Missing key → chat send fails; media stubs still work. |
-| `BETTER_AUTH_URL` | server | Public origin of the auth/RPC server (must match `PORT`). |
-| `PORT` | server | HTTP listen port, default `3000`. |
-| `EXPO_PUBLIC_AUTH_URL` | mobile | Better Auth base URL (`/api/auth/*`). |
-| `EXPO_PUBLIC_RPC_HTTP_URL` | mobile | Unary RPC, default `http://localhost:3000/rpc`. |
-| `EXPO_PUBLIC_RPC_WS_URL` | mobile | Streams, default `ws://localhost:3000/rpc/ws`. |
+| `BASE_URL` | server, mobile | Public origin of the auth/RPC server (e.g. `https://openrouter.brofrong.ru`). Auth, `/rpc`, and `/rpc/ws` are derived from it. Mobile also accepts `EXPO_PUBLIC_BASE_URL` (Expo inlines `EXPO_PUBLIC_*`). |
+| `PORT` | server | HTTP listen port, default `3000`. Behind a reverse proxy this can differ from the port in `BASE_URL`. |
 | `OPENROUTER_MODEL` | server | Optional chat model override (`AppConfig` default `openai/gpt-4o-mini`). |
+| `AUTH_DISABLE_SIGNUP` | server | Optional. `true`/`yes`/`1` disables new accounts (email sign-up and first-time OIDC login). |
+| `OIDC_ISSUER` | server | Optional. OIDC issuer URL (or discovery URL). When set with client id/secret, OIDC is the only sign-in method. Callback: `{BASE_URL}/api/auth/callback/oidc`. |
+| `OIDC_CLIENT_ID` | server | Required together with `OIDC_ISSUER` and `OIDC_CLIENT_SECRET`. |
+| `OIDC_CLIENT_SECRET` | server | Required together with `OIDC_ISSUER` and `OIDC_CLIENT_ID`. |
+| `OIDC_SCOPES` | server | Optional. Default `openid email profile`. |
 
 ## Quality
 
@@ -79,8 +79,8 @@ bun run db:migrate     # drizzle-kit migrate
 
 ## Auth and RPC
 
-- MVP auth is email/password only. Email verification, OAuth, orgs, and 2FA are out of scope.
-- Session cookie: `better-auth.session_token`. RPC requires a session except `Health`.
+- Default auth is email/password. Set `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET` to switch to OIDC-only SSO. `AUTH_DISABLE_SIGNUP` disables registration. Email verification, extra OAuth providers, orgs, and 2FA are out of scope.
+- Session cookie: `better-auth.session_token`. RPC requires a session except `Health` and `AuthSettings`.
 - Unary RPCs (`ChatList`, `ChatSend`, `ImageGenerate`, …) go over HTTP POST `/rpc` (NDJSON).
 - Streams (`ChatSubscribe`, `JobSubscribe`) go over WebSocket `/rpc/ws`.
 - Stream protocol: persist each chunk to `stream_events` **before** PubSub. Reconnect: subscribe live → replay `seq > afterSeq` → tail live, dedup by seq.

@@ -81,7 +81,7 @@ export const makeOpenRouterMedia = Effect.gen(function* () {
         return openRouterGenerateAudio({
           http,
           apiKey: apiKey.value,
-          referer: config.betterAuthUrl,
+          referer: config.baseUrl,
           model: input.model ?? DEFAULT_OPENROUTER_AUDIO_MODEL,
           prompt: input.prompt,
           ...(input.voice === undefined ? {} : { voice: input.voice }),
@@ -91,7 +91,7 @@ export const makeOpenRouterMedia = Effect.gen(function* () {
         return openRouterGenerateSpeech({
           http,
           apiKey: apiKey.value,
-          referer: config.betterAuthUrl,
+          referer: config.baseUrl,
           model: input.model ?? DEFAULT_OPENROUTER_SPEECH_MODEL,
           input: input.prompt,
           ...(input.voice === undefined ? {} : { voice: input.voice }),
@@ -101,7 +101,7 @@ export const makeOpenRouterMedia = Effect.gen(function* () {
         return openRouterGenerateVideo({
           http,
           apiKey: apiKey.value,
-          referer: config.betterAuthUrl,
+          referer: config.baseUrl,
           model: input.model ?? DEFAULT_OPENROUTER_VIDEO_MODEL,
           prompt: input.prompt,
           ...(input.aspectRatio === undefined
@@ -119,7 +119,7 @@ export const makeOpenRouterMedia = Effect.gen(function* () {
       return openRouterGenerateImage({
         http,
         apiKey: apiKey.value,
-        referer: config.betterAuthUrl,
+        referer: config.baseUrl,
         model: input.model ?? DEFAULT_OPENROUTER_IMAGE_MODEL,
         prompt: input.prompt,
         ...(input.aspectRatio === undefined

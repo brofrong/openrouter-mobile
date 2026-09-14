@@ -15,8 +15,9 @@ import { expo } from "@better-auth/expo"
 import { betterAuth } from "better-auth"
 import { account, createAuthDb, session, user, verification } from "@openrouter-mobile/db"
 import { Context, Effect, Layer } from "effect"
+import { AppConfig } from "./config"
 import { getOrCreateKv } from "./kv"
-import { trustedOrigins } from "./origins"
+import { makeTrustedOrigins } from "./origins"
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -24,16 +25,17 @@ const databaseUrl =
 
 const db = createAuthDb(databaseUrl)
 
-export const createAuth = (secret: string) =>
+export const createAuth = (secret: string, baseUrl: string) =>
   betterAuth({
     secret,
+    baseURL: baseUrl,
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: { user, session, account, verification },
     }),
-    emailAndPassword: { enabled: true }, // do NOT set requireEmailVerification
-    plugins: [expo()],
-    trustedOrigins: [...trustedOrigins], // origins.ts is ReadonlyArray; Better Auth wants string[]
+    emailAndPassword: { enabled: !oidcEnabled, disableSignUp }, // do NOT set requireEmailVerification
+    plugins: [expo(), genericOAuth({ config: oidc ? [{ providerId: "oidc", discoveryUrl, clientId, clientSecret, disableSignUp }] : [] })],
+    trustedOrigins: makeTrustedOrigins(baseUrl),
   })
 
 export type Session = ReturnType<typeof createAuth>["$Infer"]["Session"]
@@ -46,18 +48,19 @@ export const AuthLive = Layer.effect(
   Auth,
   Effect.gen(function* () {
     const secret = yield* getOrCreateKv("better_auth_secret", generateBetterAuthSecret)
-    return createAuth(secret)
+    const { baseUrl } = yield* AppConfig
+    return createAuth(secret, baseUrl)
   }),
 )
 ```
 
-- `trustedOrigins` and RPC CORS share `apps/server/src/shared/origins.ts` (Expo web 8081/8082/19006 + `openrouter-mobile://` / `exp://`).
+- `makeTrustedOrigins(baseUrl)` and RPC CORS share `apps/server/src/shared/origins.ts` (public `BASE_URL` + Expo web 8081/8082/19006 + `openrouter-mobile://` / `exp://`).
 - Adapter: `drizzleAdapter` from `@better-auth/drizzle-adapter/relations-v2` (NOT `better-auth/adapters/drizzle`, NOT `@better-auth/drizzle-adapter` default/v1).
 - Server plugin: `expo()` from `@better-auth/expo`.
 - Classic Drizzle client only: `createAuthDb` in `packages/db/src/client.ts` uses `drizzle-orm/postgres-js` + `postgres`. Effect `PgDrizzle` is not accepted by the adapter. `drizzle-orm/bun-sql` fails under `bun x auth generate` (CLI loads config with Node/jiti; `bun` is not resolvable).
 - Mount `auth.handler` on the same Effect `HttpRouter` as RPC in `apps/server/src/shared/AuthHttp.ts` (`Layer.unwrap` + `yield* Auth`, then `HttpRouter.add("*", "/api/auth/*", ...)` + `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`). Better Auth HTTP, not Effect RPC.
-- Email/password enabled; do not require email verification for MVP.
-- Better Auth `secret` is generated on first boot into Postgres `kv` (key `better_auth_secret`). `BETTER_AUTH_URL` remains an env var. Optional leftover `BETTER_AUTH_SECRET` is copied into `kv` once if the row is missing.
+- Email/password enabled unless `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` are set (then OIDC via `genericOAuth` is the only sign-in). `AUTH_DISABLE_SIGNUP` sets `disableSignUp` on email/password and OIDC. Do not require email verification.
+- Better Auth `secret` is generated on first boot into Postgres `kv` (key `better_auth_secret`). Public origin is `BASE_URL` (Better Auth `baseURL`). Optional leftover `BETTER_AUTH_SECRET` is copied into `kv` once if the row is missing. `BETTER_AUTH_URL` is still accepted as a fallback.
 
 ## Schema + relations
 

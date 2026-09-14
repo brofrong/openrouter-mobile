@@ -9,9 +9,18 @@ import {
   verification,
 } from "@openrouter-mobile/db";
 import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { Context, Effect, Layer } from "effect";
+import {
+  OIDC_PROVIDER_ID,
+  type OidcSettings,
+  oidcIncompleteMessage,
+  resolveOidcFromConfig,
+} from "./auth-options";
+import { DEFAULT_BASE_URL } from "./baseUrl";
+import { AppConfig } from "./config";
 import { getOrCreateKv } from "./kv";
-import { trustedOrigins } from "./origins";
+import { makeTrustedOrigins } from "./origins";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
@@ -36,15 +45,28 @@ const initialBetterAuthSecret = (): string => {
   return generateBetterAuthSecret();
 };
 
-export const createAuth = (secret: string) =>
-  betterAuth({
+export type CreateAuthOptions = {
+  oidc?: OidcSettings;
+  disableSignup?: boolean;
+};
+
+export const createAuth = (
+  secret: string,
+  baseUrl: string = DEFAULT_BASE_URL,
+  options: CreateAuthOptions = {},
+) => {
+  const oidcEnabled = options.oidc !== undefined;
+  const disableSignup = options.disableSignup === true;
+  return betterAuth({
     secret,
+    baseURL: baseUrl,
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: authSchema,
     }),
     emailAndPassword: {
-      enabled: true,
+      enabled: !oidcEnabled,
+      disableSignUp: disableSignup,
     },
     user: {
       changeEmail: {
@@ -52,9 +74,26 @@ export const createAuth = (secret: string) =>
         updateEmailWithoutVerification: true,
       },
     },
-    plugins: [expo()],
-    trustedOrigins: [...trustedOrigins],
+    plugins: [
+      expo(),
+      genericOAuth({
+        config: options.oidc
+          ? [
+              {
+                providerId: OIDC_PROVIDER_ID,
+                clientId: options.oidc.clientId,
+                clientSecret: options.oidc.clientSecret,
+                discoveryUrl: options.oidc.discoveryUrl,
+                scopes: [...options.oidc.scopes],
+                disableSignUp: disableSignup,
+              },
+            ]
+          : [],
+      }),
+    ],
+    trustedOrigins: makeTrustedOrigins(baseUrl),
   });
+};
 
 export type AuthInstance = ReturnType<typeof createAuth>;
 export type Session = AuthInstance["$Infer"]["Session"];
@@ -76,6 +115,14 @@ export const AuthLive = Layer.effect(
       BETTER_AUTH_SECRET_KEY,
       initialBetterAuthSecret,
     );
-    return createAuth(secret);
+    const config = yield* AppConfig;
+    const oidc = resolveOidcFromConfig(config);
+    if (oidc._tag === "incomplete") {
+      return yield* Effect.die(new Error(oidcIncompleteMessage(oidc.missing)));
+    }
+    return createAuth(secret, config.baseUrl, {
+      ...(oidc._tag === "on" ? { oidc: oidc.settings } : {}),
+      disableSignup: config.authDisableSignup,
+    });
   }),
 );

@@ -1,10 +1,12 @@
-import { type Href, Link } from "expo-router";
+import { type Href, Link, Redirect } from "expo-router";
 import { useState } from "react";
 import { Button, H2, Input, Paragraph, Text, YStack } from "tamagui";
 import { authClient } from "../shared/auth-client";
+import { useAuthSettings } from "../shared/auth-settings";
 import { formatRpcError } from "../shared/errors";
 
 export default function SignUpScreen() {
+  const { settings, loading, error: settingsError } = useAuthSettings();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +33,21 @@ export default function SignUpScreen() {
     }
   };
 
+  if (loading && settings === undefined) {
+    return (
+      <YStack flex={1} p="$4" gap="$3" bg="$background" justify="center">
+        <Paragraph>Loading…</Paragraph>
+      </YStack>
+    );
+  }
+
+  if (
+    settings !== undefined &&
+    (settings.oidcEnabled || !settings.signupEnabled)
+  ) {
+    return <Redirect href={"/sign-in" as Href} />;
+  }
+
   return (
     <YStack flex={1} p="$4" gap="$3" bg="$background" justify="center">
       <H2>Sign up</H2>
@@ -51,6 +68,9 @@ export default function SignUpScreen() {
       />
       {error !== undefined ? (
         <Paragraph color="$red10">{error}</Paragraph>
+      ) : null}
+      {settingsError !== undefined ? (
+        <Paragraph color="$red10">{settingsError}</Paragraph>
       ) : null}
       <Button disabled={busy} onPress={() => void onSubmit()}>
         {busy ? "Creating account…" : "Create account"}

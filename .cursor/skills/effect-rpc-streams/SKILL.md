@@ -213,7 +213,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc"
 
 RpcClient.make(AppRpcs)
 RpcClient.layerProtocolHttp({
-  url: process.env.EXPO_PUBLIC_RPC_HTTP_URL,
+  url: rpcHttpUrl, // derived from BASE_URL / EXPO_PUBLIC_BASE_URL
   transformClient: (client) =>
     HttpClient.mapRequestEffect(client, (request) =>
       Effect.promise(() => authClient.getCookie()).pipe(

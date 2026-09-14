@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Image, Pressable } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
 import { SelectableText } from "../../shared/ui/SelectableText";
+import { UserBubble } from "../../shared/ui/UserBubble";
 import { ImagePreview } from "./ImagePreview";
 import { containedImageSize, THREAD_IMAGE_MAX_HEIGHT } from "./image-layout";
 import {
@@ -31,15 +32,7 @@ export function ImageThread({ items }: ImageThreadProps) {
     <>
       {items.map((item) =>
         item.role === "user" ? (
-          <YStack
-            key={item.id}
-            mb="$3"
-            p="$3"
-            bg="$color4"
-            rounded="$3"
-            select="text"
-          >
-            <SelectableText fontWeight="700">user</SelectableText>
+          <UserBubble key={item.id}>
             <SelectableText>{item.content}</SelectableText>
             {item.images !== undefined && item.images.length > 0 ? (
               <XStack flexWrap="wrap" gap="$2" mt="$2">
@@ -53,9 +46,9 @@ export function ImageThread({ items }: ImageThreadProps) {
                 ))}
               </XStack>
             ) : null}
-          </YStack>
+          </UserBubble>
         ) : (
-          <AssistantBubble
+          <AssistantResult
             key={item.id}
             item={item}
             onOpenPreview={setPreview}
@@ -75,7 +68,7 @@ export function ImageThread({ items }: ImageThreadProps) {
   );
 }
 
-function AssistantBubble({
+function AssistantResult({
   item,
   onOpenPreview,
 }: {
@@ -94,9 +87,6 @@ function AssistantBubble({
   return (
     <YStack
       mb="$3"
-      p="$3"
-      bg="$color3"
-      rounded="$3"
       select="text"
       onLayout={(event) => {
         const width = event.nativeEvent.layout.width;
@@ -105,13 +95,12 @@ function AssistantBubble({
         );
       }}
     >
-      <SelectableText fontWeight="700">assistant</SelectableText>
       {item.status === "failed" ? (
-        <Paragraph color="$red10" mt="$2" select="text">
+        <Paragraph color="$red10" select="text">
           {item.error ?? "Generation failed."}
         </Paragraph>
       ) : item.status === "completed" && urls.length > 0 ? (
-        <XStack flexWrap="wrap" gap="$2" mt="$2">
+        <XStack flexWrap="wrap" gap="$2">
           {urls.map((imageUrl) => (
             <Pressable
               accessibilityLabel="Open image preview"
@@ -141,7 +130,7 @@ function AssistantBubble({
           ))}
         </XStack>
       ) : (
-        <XStack items="center" gap="$2" mt="$2">
+        <XStack items="center" gap="$2">
           <Spinner />
           <Paragraph color="$color10">Generating image…</Paragraph>
         </XStack>

@@ -1,19 +1,29 @@
-export const expoWebOrigins = [
-  "http://localhost:8081",
-  "http://127.0.0.1:8081",
-  "http://localhost:8082",
-  "http://127.0.0.1:8082",
-  "http://localhost:19006",
-  "http://127.0.0.1:19006",
+import { DEFAULT_BASE_URL, trimTrailingSlash } from "./baseUrl";
+
+const expoWebPorts = [
+  8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089, 8090, 19006,
 ] as const;
+
+export const expoWebOrigins = expoWebPorts.flatMap((port) => [
+  `http://localhost:${port}`,
+  `http://127.0.0.1:${port}`,
+]);
 
 export const corsAllowedOrigins: ReadonlyArray<string> = expoWebOrigins;
 
-export const trustedOrigins: ReadonlyArray<string> = [
-  "openrouter-mobile://",
-  "http://localhost:3000",
-  ...expoWebOrigins,
-  ...(process.env.NODE_ENV === "production"
-    ? []
-    : ["exp://", "exp://**", "exp://192.168.*.*:*/**"]),
-];
+export const makeTrustedOrigins = (baseUrl: string): Array<string> => {
+  const origins = new Set<string>([
+    "openrouter-mobile://",
+    trimTrailingSlash(baseUrl),
+    DEFAULT_BASE_URL,
+    ...expoWebOrigins,
+  ]);
+  if (process.env.NODE_ENV !== "production") {
+    origins.add("exp://");
+    origins.add("exp://**");
+    origins.add("exp://192.168.*.*:*/**");
+    origins.add("http://localhost:*");
+    origins.add("http://127.0.0.1:*");
+  }
+  return [...origins];
+};

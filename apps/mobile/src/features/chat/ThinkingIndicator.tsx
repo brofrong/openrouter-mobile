@@ -75,19 +75,16 @@ export function ThinkingIndicator() {
   }, []);
 
   return (
-    <YStack mb="$3" p="$3" bg="$color3" rounded="$3">
-      <Text fontWeight="700">assistant</Text>
-      <XStack items="center" gap="$2" mt="$1">
-        <Animated.View style={pulseStyle}>
-          <YStack width={7} height={7} rounded={99} bg="$color10" />
-        </Animated.View>
-        <Animated.View style={morphStyle}>
-          <Text color="$color10" fontStyle="italic">
-            {phrase}
-            {".".repeat(dots)}
-          </Text>
-        </Animated.View>
-      </XStack>
-    </YStack>
+    <XStack items="center" gap="$2" mb="$3">
+      <Animated.View style={pulseStyle}>
+        <YStack width={7} height={7} rounded={99} bg="$color10" />
+      </Animated.View>
+      <Animated.View style={morphStyle}>
+        <Text color="$color10" fontStyle="italic">
+          {phrase}
+          {".".repeat(dots)}
+        </Text>
+      </Animated.View>
+    </XStack>
   );
 }

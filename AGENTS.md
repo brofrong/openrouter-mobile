@@ -6,7 +6,7 @@ Read before writing code.
 - Frontend: Expo SDK 57 (ios/android/web), Tamagui v5, Feature-Sliced Design
 - RPC: `effect/unstable/rpc` (NOT tRPC, NOT oRPC, NOT REST). `@effect/rpc` is not published on Effect 4 rc.
 - HTTP: `effect/unstable/http` (`HttpRouter`). Bun adapters: `BunHttpServer` / `BunRuntime` from `@effect/platform-bun`
-- Auth: Better Auth 1.7 (email/password), `@better-auth/expo`, `@better-auth/drizzle-adapter/relations-v2`
+- Auth: Better Auth 1.7 (email/password or OIDC SSO), `@better-auth/expo`, `@better-auth/drizzle-adapter/relations-v2`
 - DB: PostgreSQL, drizzle-orm@rc (`1.0.0-rc.5-ab785fc`), Relational Queries v2 (`defineRelations`)
 - Lint/format: Biome only — `bun run check` / `bun run check:fix`. Never ESLint or Prettier.
 
@@ -24,4 +24,4 @@ Read before writing code.
 - Reconnect protocol: subscribe live → replay DB `seq > afterSeq` → tail live, dedup by seq
 - Effect Schema only (no Zod)
 - Auth is Better Auth only (no NextAuth, Clerk, custom JWT). RPC requires a session cookie (except `Health`).
-- MVP auth: email/password only. Do not require email verification; do not add OAuth, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.
+- Default auth: email/password. Optional OIDC SSO via `OIDC_ISSUER` + `OIDC_CLIENT_ID` + `OIDC_CLIENT_SECRET` (then OIDC is the only sign-in). `AUTH_DISABLE_SIGNUP` disables registration. Do not require email verification; do not add extra OAuth providers, orgs, or 2FA. `.cursor/skills/better-auth/SKILL.md` overrides `.cursor/skills/better-auth-official/` on stack and MVP scope.

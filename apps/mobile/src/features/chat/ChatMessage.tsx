@@ -4,6 +4,7 @@ import { XStack, YStack } from "tamagui";
 import { CopyIconButton } from "../../shared/ui/CopyIconButton";
 import { MarkdownText } from "../../shared/ui/MarkdownText";
 import { SelectableText } from "../../shared/ui/SelectableText";
+import { UserBubble } from "../../shared/ui/UserBubble";
 import type { ThreadItem } from "./thread";
 
 type ChatMessageProps = {
@@ -12,41 +13,45 @@ type ChatMessageProps = {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const stored = decodeStoredContent(message.content);
-  const isAssistant = message.role === "assistant";
+  const images =
+    stored.images.length > 0 ? (
+      <XStack flexWrap="wrap" gap="$2" mt="$2">
+        {stored.images.map((url) => (
+          <Image
+            accessibilityIgnoresInvertColors
+            key={url}
+            source={{ uri: url }}
+            style={{ borderRadius: 8, height: 72, width: 72 }}
+          />
+        ))}
+      </XStack>
+    ) : null;
+
+  if (message.role !== "assistant") {
+    return (
+      <UserBubble>
+        {stored.text.length > 0 ? (
+          <SelectableText>{stored.text}</SelectableText>
+        ) : null}
+        {images}
+      </UserBubble>
+    );
+  }
 
   return (
-    <YStack
-      mb="$3"
-      p="$3"
-      bg={message.role === "user" ? "$color4" : "$color3"}
-      rounded="$3"
-      select="text"
-    >
-      <XStack items="center" justify="space-between">
-        <SelectableText fontWeight="700">{message.role}</SelectableText>
-        {isAssistant && stored.text.length > 0 ? (
-          <CopyIconButton accessibilityLabel="Copy reply" text={stored.text} />
-        ) : null}
-      </XStack>
+    <YStack mb="$3" select="text">
       {stored.text.length > 0 ? (
-        isAssistant ? (
+        <>
           <MarkdownText content={stored.text} />
-        ) : (
-          <SelectableText>{stored.text}</SelectableText>
-        )
-      ) : null}
-      {stored.images.length > 0 ? (
-        <XStack flexWrap="wrap" gap="$2" mt="$2">
-          {stored.images.map((url) => (
-            <Image
-              accessibilityIgnoresInvertColors
-              key={url}
-              source={{ uri: url }}
-              style={{ borderRadius: 8, height: 72, width: 72 }}
+          <XStack justify="flex-end">
+            <CopyIconButton
+              accessibilityLabel="Copy reply"
+              text={stored.text}
             />
-          ))}
-        </XStack>
+          </XStack>
+        </>
       ) : null}
+      {images}
     </YStack>
   );
 }

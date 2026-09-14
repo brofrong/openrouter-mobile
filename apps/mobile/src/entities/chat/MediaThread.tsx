@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { Platform } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
 import { SelectableText } from "../../shared/ui/SelectableText";
+import { UserBubble } from "../../shared/ui/UserBubble";
 import type { MediaAssistantItem, MediaThreadItem } from "./media-thread";
 
 export type MediaResultKind = "video" | "audio";
@@ -25,19 +26,11 @@ export function MediaThread({
     <>
       {items.map((item) =>
         item.role === "user" ? (
-          <YStack
-            key={item.id}
-            mb="$3"
-            p="$3"
-            bg="$color4"
-            rounded="$3"
-            select="text"
-          >
-            <SelectableText fontWeight="700">user</SelectableText>
+          <UserBubble key={item.id}>
             <SelectableText>{item.content}</SelectableText>
-          </YStack>
+          </UserBubble>
         ) : (
-          <AssistantBubble
+          <AssistantResult
             key={item.id}
             generatingLabel={generatingLabel}
             item={item}
@@ -49,7 +42,7 @@ export function MediaThread({
   );
 }
 
-function AssistantBubble({
+function AssistantResult({
   item,
   generatingLabel,
   resultKind,
@@ -59,16 +52,15 @@ function AssistantBubble({
   readonly resultKind: MediaResultKind;
 }) {
   return (
-    <YStack mb="$3" p="$3" bg="$color3" rounded="$3" select="text">
-      <SelectableText fontWeight="700">assistant</SelectableText>
+    <YStack mb="$3" select="text">
       {item.status === "failed" ? (
-        <Paragraph color="$red10" mt="$2" select="text">
+        <Paragraph color="$red10" select="text">
           {item.error ?? "Generation failed."}
         </Paragraph>
       ) : item.status === "completed" && item.url !== undefined ? (
         <ResultMedia resultKind={resultKind} url={item.url} />
       ) : (
-        <XStack items="center" gap="$2" mt="$2">
+        <XStack items="center" gap="$2">
           <Spinner />
           <Paragraph color="$color10">{generatingLabel}</Paragraph>
         </XStack>

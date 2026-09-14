@@ -62,7 +62,7 @@ export const makeOpenRouterChat = Effect.gen(function* () {
         http,
         apiKey: apiKey.value,
         model: options?.model ?? config.openRouterModel,
-        referer: config.betterAuthUrl,
+        referer: config.baseUrl,
         messages,
         ...(options?.effort === undefined ? {} : { effort: options.effort }),
       });
@@ -71,7 +71,7 @@ export const makeOpenRouterChat = Effect.gen(function* () {
       const apiKey = config.openRouterApiKey;
       return openRouterListModels({
         http,
-        referer: config.betterAuthUrl,
+        referer: config.baseUrl,
         offset: options?.offset ?? 0,
         limit: options?.limit ?? 30,
         ...(options?.query === undefined ? {} : { query: options.query }),

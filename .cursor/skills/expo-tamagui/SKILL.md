@@ -65,8 +65,8 @@ UI primitives from `tamagui`: `YStack`, `XStack`, `H1`/`H2`, `Paragraph`, `Text`
 | File | Role |
 | --- | --- |
 | `apps/mobile/src/app/_layout.tsx` | `TamaguiProvider` + `ThemeProvider` + session gate (`/sign-in` when logged out) |
-| `apps/mobile/src/app/sign-in.tsx` | Email/password sign-in |
-| `apps/mobile/src/app/sign-up.tsx` | Email/password sign-up |
+| `apps/mobile/src/app/sign-in.tsx` | Email/password or OIDC SSO sign-in |
+| `apps/mobile/src/app/sign-up.tsx` | Email/password sign-up (hidden when disabled or OIDC-only) |
 | `apps/mobile/src/app/(tabs)/_layout.tsx` | Tabs: Chat, Images, Video, Speech, Audio + sign-out |
 | `apps/mobile/src/app/(tabs)/index.tsx` | Chat (`ChatScreen`) |
 | `apps/mobile/src/app/(tabs)/images.tsx` | Images (`ImagesScreen` chats + generated image thread) |
@@ -95,7 +95,7 @@ Start: `bun run --filter @openrouter-mobile/mobile dev` or `bun run --filter @op
 
 ## Client wiring
 
-Env (defaults `localhost:3000`): `EXPO_PUBLIC_AUTH_URL`, `EXPO_PUBLIC_RPC_HTTP_URL`, `EXPO_PUBLIC_RPC_WS_URL` in `apps/mobile/src/shared/env.ts`.
+Env (defaults `localhost:3000`): `BASE_URL` / `EXPO_PUBLIC_BASE_URL` in `apps/mobile/src/shared/env.ts`. Auth, `/rpc`, and `/rpc/ws` (ws/wss) are derived from that origin.
 
 ```ts
 import { fetch as expoFetch } from "expo/fetch";
@@ -111,7 +111,7 @@ Layer.succeed(FetchHttpClient.RequestInit, {
 Socket.fromWebSocket(acquire) // sets binaryType = "arraybuffer"
 ```
 
-- HTTP RPC: POST `EXPO_PUBLIC_RPC_HTTP_URL` (`/rpc`), NDJSON, `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
-- Streams: WebSocket `EXPO_PUBLIC_RPC_WS_URL` (`/rpc/ws`). Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
+- HTTP RPC: POST `{BASE_URL}/rpc` (NDJSON), `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
+- Streams: WebSocket `{ws(s)://BASE_URL}/rpc/ws`. Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
 - `expo-secure-store` is native-only. Web auth storage is `localStorage`; the Expo plugin skips SecureStore on web and uses `credentials: "include"` for `/api/auth/*`.
 - Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq}.ts`

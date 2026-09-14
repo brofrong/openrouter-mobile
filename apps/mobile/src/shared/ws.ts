@@ -28,7 +28,7 @@ const openRpcWebSocket = (cookie: string): WebSocket => {
 };
 
 /**
- * Effect RPC WebSocket to `EXPO_PUBLIC_RPC_WS_URL`. `fromWebSocket` sets
+ * Effect RPC WebSocket to `{BASE_URL}/rpc/ws`. `fromWebSocket` sets
  * `binaryType = "arraybuffer"`. Native attaches `Cookie` on the handshake;
  * browsers send cookies for `localhost:3000` automatically and forbid custom
  * Cookie headers.
