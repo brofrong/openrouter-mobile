@@ -1,4 +1,8 @@
-import type { Message } from "@openrouter-mobile/domain";
+import type {
+  ChatMessagePage,
+  ChatStreamEvent,
+  Message,
+} from "@openrouter-mobile/domain";
 
 export const CHAT_MESSAGE_PAGE_SIZE = 30;
 
@@ -45,3 +49,72 @@ export const commitDraft = (
     },
   ];
 };
+
+export type ChatThreadState = {
+  readonly messages: ReadonlyArray<ThreadItem>;
+  readonly draft: string;
+  readonly generating: boolean;
+  readonly error?: string;
+};
+
+export const emptyThread = (): ChatThreadState => ({
+  messages: [],
+  draft: "",
+  generating: false,
+});
+
+const hasMessageId = (
+  messages: ReadonlyArray<ThreadItem>,
+  id: string,
+): boolean => messages.some((item) => item.id === id);
+
+const ignoreTokenAfterDone = (state: ChatThreadState): boolean =>
+  !state.generating && state.messages.at(-1)?.role === "assistant";
+
+export const applyChatStreamEvent = (
+  state: ChatThreadState,
+  event: ChatStreamEvent,
+): ChatThreadState => {
+  switch (event._tag) {
+    case "user":
+      return hasMessageId(state.messages, event.message.id)
+        ? state
+        : {
+            ...state,
+            messages: [...state.messages, toThreadItem(event.message)],
+          };
+    case "token":
+      if (ignoreTokenAfterDone(state)) {
+        return state;
+      }
+      return {
+        ...state,
+        draft: `${state.draft}${event.text}`,
+        generating: true,
+      };
+    case "done":
+      return {
+        ...state,
+        messages: hasMessageId(state.messages, event.message.id)
+          ? state.messages
+          : [...state.messages, toThreadItem(event.message)],
+        draft: "",
+        generating: false,
+      };
+    case "error":
+      return {
+        ...state,
+        generating: false,
+        error: event.error,
+      };
+    case "title":
+    case "job":
+      return state;
+  }
+};
+
+export const hydrateFromPage = (page: ChatMessagePage): ChatThreadState => ({
+  messages: page.messages.map(toThreadItem),
+  draft: page.inProgress ?? "",
+  generating: page.generating,
+});

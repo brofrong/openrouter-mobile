@@ -1,4 +1,8 @@
-import { decodeStoredContent } from "@openrouter-mobile/domain";
+import {
+  type ChatJobEvent,
+  decodeStoredContent,
+  type GenerationJob,
+} from "@openrouter-mobile/domain";
 
 export type ImageJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -132,6 +136,39 @@ export const applyJobEvent = (
       ...(event.error === undefined ? {} : { error: event.error }),
     };
   });
+
+export const applyChatJobEvent = (
+  items: ReadonlyArray<ImageThreadItem>,
+  event: ChatJobEvent,
+): ReadonlyArray<ImageThreadItem> =>
+  applyJobEvent(items, event.jobId, {
+    status: event.status,
+    ...(event.url === undefined ? {} : { url: event.url }),
+    ...(event.error === undefined ? {} : { error: event.error }),
+  });
+
+export const hydrateJobs = (
+  items: ReadonlyArray<ImageThreadItem>,
+  jobs: ReadonlyArray<GenerationJob>,
+): ReadonlyArray<ImageThreadItem> => {
+  const next: Array<ImageThreadItem> = [...items];
+  for (const job of jobs) {
+    if (
+      next.some((item) => item.role === "assistant" && item.jobId === job.id)
+    ) {
+      continue;
+    }
+    next.push({
+      id: `job-${job.id}`,
+      role: "assistant",
+      jobId: job.id,
+      status: job.status,
+      ...(job.resultUrl === undefined ? {} : { url: job.resultUrl }),
+      ...(job.error === undefined ? {} : { error: job.error }),
+    });
+  }
+  return next;
+};
 
 export const failTurn = (
   items: ReadonlyArray<ImageThreadItem>,
