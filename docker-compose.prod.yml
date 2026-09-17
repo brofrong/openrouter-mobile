@@ -27,6 +27,40 @@ services:
     networks:
       - openrouter-mobile
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-openrouter}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-openrouter}
+    volumes:
+      - miniodata:/data
+    networks:
+      - openrouter-mobile
+
+  minio-init:
+    image: minio/mc:latest
+    restart: on-failure
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          sleep 1
+        done
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-openrouter}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-openrouter}
+      S3_BUCKET: ${S3_BUCKET:-media}
+    networks:
+      - openrouter-mobile
+
   server:
     image: ghcr.io/brofrong/openrouter-mobile/server:${IMAGE_TAG:-latest}
     pull_policy: always
@@ -44,9 +78,16 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-openrouter}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-openrouter}
+      S3_BUCKET: ${S3_BUCKET:-media}
+      S3_REGION: ${S3_REGION:-us-east-1}
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
     # expose:
     #   - "3000"
     healthcheck:
@@ -67,6 +108,7 @@ services:
 
 volumes:
   pgdata:
+  miniodata:
   caddy_data:
   caddy_config:
 

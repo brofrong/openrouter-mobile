@@ -16,7 +16,9 @@ import { AuthLive } from "../shared/auth";
 import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
 import { loadRepoEnv } from "../shared/loadEnv";
+import { MediaHttpLive } from "../shared/MediaHttp";
 import { applyMigrations } from "../shared/migrate";
+import { ObjectStoreLive } from "../shared/object-store";
 import { corsAllowedOrigins } from "../shared/origins";
 import { BunRuntime } from "../shared/runtime";
 import { WebLive } from "../shared/web";
@@ -40,6 +42,7 @@ const FeatureInfra = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterChatLive,
   OpenRouterMediaLive,
+  ObjectStoreLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const RpcRoutes = HttpRouter.cors({
@@ -47,7 +50,7 @@ const RpcRoutes = HttpRouter.cors({
   credentials: true,
 }).pipe(
   Layer.provideMerge(
-    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive, WebLive).pipe(
+    Layer.mergeAll(RpcHttp, RpcWs, AuthHttpLive, MediaHttpLive, WebLive).pipe(
       Layer.provide(HealthLive),
       Layer.provide(ChatLive),
       Layer.provide(GenerationLive),

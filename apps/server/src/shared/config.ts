@@ -30,4 +30,16 @@ export const AppConfig = Config.all({
     Config.withDefault(false),
   ),
   webDir: Config.String("WEB_DIR").pipe(Config.withDefault("/app/web")),
+  s3Endpoint: Config.String("S3_ENDPOINT").pipe(
+    Config.withDefault("http://localhost:9000"),
+    Config.map(trimTrailingSlash),
+  ),
+  s3AccessKeyId: Config.String("S3_ACCESS_KEY_ID").pipe(
+    Config.withDefault("openrouter"),
+  ),
+  s3SecretAccessKey: Config.Redacted("S3_SECRET_ACCESS_KEY").pipe(
+    Config.withDefault(Redacted.make("openrouter")),
+  ),
+  s3Bucket: Config.String("S3_BUCKET").pipe(Config.withDefault("media")),
+  s3Region: Config.String("S3_REGION").pipe(Config.withDefault("us-east-1")),
 });

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Pressable } from "react-native";
 import { Text, useTheme, XStack, YStack } from "tamagui";
-import { pickImageDataUrl } from "./pick-image";
+import { pickAndUploadImage } from "./pick-image";
 
 type ComposerAttachProps = {
   readonly images: ReadonlyArray<string>;
@@ -27,7 +27,7 @@ export function ComposerAttach({
         accessibilityRole="button"
         disabled={!canAdd}
         onPress={() => {
-          void pickImageDataUrl().then((url) => {
+          void pickAndUploadImage().then((url) => {
             if (url !== undefined) {
               onChange([...images, url]);
             }

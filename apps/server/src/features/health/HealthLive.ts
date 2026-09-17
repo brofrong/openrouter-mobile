@@ -7,7 +7,7 @@ export const HealthLive = HealthRpcs.toLayer({
   Health: () => Effect.succeed({ ok: true as const }),
   AuthSettings: () =>
     Effect.gen(function* () {
-      const config = yield* AppConfig;
+      const config = yield* AppConfig.pipe(Effect.orDie);
       return publicAuthSettingsFromConfig(config);
     }),
 });

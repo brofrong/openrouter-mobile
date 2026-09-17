@@ -16,7 +16,7 @@ alwaysApply: false
 - Native video playback: `expo-video` + `VideoPlayer` (data URLs via `expo-file-system`)
 
 ## Do not
-- Nested `File` in RPC payloads (no HTTP upload route; `AudioGenerate` takes a text prompt)
+- Nested `File` in RPC payloads. Upload binaries with `POST /media`, then pass the returned URL in RPC.
 - Import `apps/server` from the mobile app
 
 Read `.cursor/skills/expo-tamagui/SKILL.md`.

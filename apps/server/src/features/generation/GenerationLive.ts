@@ -16,6 +16,11 @@ import { persistChatSelection, requireOwnedChatKind } from "../../shared/chats";
 import { sanitizeChatTitle } from "../../shared/chatTitle";
 import { AppDb } from "../../shared/db";
 import type { OpenRouterUsage } from "../../shared/openrouter";
+import {
+  persistGeneratedUrl,
+  persistMediaUrls,
+  resolveMediaUrls,
+} from "../../shared/persist-media";
 import { persistUsageEvent } from "../../shared/persist-usage";
 import {
   DurableStream,
@@ -241,7 +246,14 @@ const runGeneration = (options: {
       options.chatId,
     );
 
-    const result = yield* options.media
+    const inputReferences =
+      options.inputReferences === undefined
+        ? undefined
+        : yield* resolveMediaUrls(options.inputReferences).pipe(
+            Effect.mapError(toAppError),
+          );
+
+    const generated = yield* options.media
       .generate({
         kind: options.kind,
         prompt: options.prompt,
@@ -264,9 +276,7 @@ const runGeneration = (options: {
         ...(options.generateAudio === undefined
           ? {}
           : { generateAudio: options.generateAudio }),
-        ...(options.inputReferences === undefined
-          ? {}
-          : { inputReferences: options.inputReferences }),
+        ...(inputReferences === undefined ? {} : { inputReferences }),
         ...(options.voice === undefined ? {} : { voice: options.voice }),
       })
       .pipe(
@@ -275,9 +285,24 @@ const runGeneration = (options: {
           fail(error).pipe(Effect.as(undefined)),
         ),
       );
-    if (result === undefined) {
+    if (generated === undefined) {
       return;
     }
+
+    const storedUrl = yield* persistGeneratedUrl(
+      generated.url,
+      options.userId,
+    ).pipe(
+      Effect.mapError(toAppError),
+      Effect.catchTag("AppError", (error) =>
+        fail(error).pipe(Effect.as(undefined)),
+      ),
+    );
+    if (storedUrl === undefined) {
+      return;
+    }
+
+    const result = { ...generated, url: storedUrl };
 
     yield* persistUsageEvent({
       db: options.db,
@@ -453,6 +478,10 @@ const generateInChat = (options: {
     }
     const db = yield* AppDb;
     const durable = yield* DurableStream;
+    const inputReferences = yield* persistMediaUrls(
+      options.inputReferences ?? [],
+      chat.userId,
+    ).pipe(Effect.mapError(toAppError));
     const history = yield* db.query.messages
       .findMany({
         where: { chatId: chat.id },
@@ -463,10 +492,7 @@ const generateInChat = (options: {
       .values({
         chatId: chat.id,
         role: "user",
-        content: encodeStoredContent(
-          options.prompt,
-          options.inputReferences ?? [],
-        ),
+        content: encodeStoredContent(options.prompt, inputReferences),
       })
       .returning()
       .pipe(Effect.mapError(unexpected));
@@ -517,9 +543,7 @@ const generateInChat = (options: {
       ...(options.generateAudio === undefined
         ? {}
         : { generateAudio: options.generateAudio }),
-      ...(options.inputReferences === undefined
-        ? {}
-        : { inputReferences: options.inputReferences }),
+      ...(inputReferences.length === 0 ? {} : { inputReferences }),
       ...(options.voice === undefined ? {} : { voice: options.voice }),
     });
   });

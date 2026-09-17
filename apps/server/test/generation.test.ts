@@ -41,6 +41,10 @@ import {
 } from "../src/shared/AuthMiddleware";
 import { Auth, createAuth, type Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
+import {
+  MemoryObjectStoreLive,
+  type ObjectStore,
+} from "../src/shared/object-store";
 
 if (process.env.DATABASE_URL === undefined) {
   process.env.DATABASE_URL =
@@ -55,6 +59,7 @@ const AuthTestLive = Layer.succeed(
 const TestLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterMediaStubLive,
+  MemoryObjectStoreLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const OpenRouterFailLive = Layer.succeed(OpenRouterMedia, {
@@ -67,17 +72,21 @@ const OpenRouterFailLive = Layer.succeed(OpenRouterMedia, {
     ),
 });
 
-const FailLive = Layer.mergeAll(DurableStreamLive, OpenRouterFailLive).pipe(
-  Layer.provideMerge(DbLive),
-);
+const FailLive = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterFailLive,
+  MemoryObjectStoreLive,
+).pipe(Layer.provideMerge(DbLive));
 
 const OpenRouterDieLive = Layer.succeed(OpenRouterMedia, {
   generate: () => Effect.die(new Error("media fiber died")),
 });
 
-const DieLive = Layer.mergeAll(DurableStreamLive, OpenRouterDieLive).pipe(
-  Layer.provideMerge(DbLive),
-);
+const DieLive = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterDieLive,
+  MemoryObjectStoreLive,
+).pipe(Layer.provideMerge(DbLive));
 
 const makeSession = (userId: string, email: string): Session =>
   ({
@@ -106,7 +115,7 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterMedia | Scope.Scope
+    AppDb | DurableStream | OpenRouterMedia | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(TestLive)));
@@ -115,7 +124,7 @@ const runFail = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterMedia | Scope.Scope
+    AppDb | DurableStream | OpenRouterMedia | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(FailLive)));
@@ -124,7 +133,7 @@ const runDie = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterMedia | Scope.Scope
+    AppDb | DurableStream | OpenRouterMedia | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(DieLive)));
@@ -215,11 +224,12 @@ test("generateImage forwards model and image options to OpenRouterMedia", async 
   let seen: MediaGenerateInput | undefined;
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) => {
         seen = input;
         return Effect.succeed({
-          url: `https://example.invalid/openrouter-stub/image/${input.jobId}`,
+          url: `data:image/png;base64,${Buffer.from(`image:${input.jobId}`).toString("base64")}`,
         });
       },
     }),
@@ -262,10 +272,11 @@ test("generateImage forwards model and image options to OpenRouterMedia", async 
 test("generateImage records usage for the current user", async () => {
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) =>
         Effect.succeed({
-          url: `https://example.invalid/openrouter-stub/image/${input.jobId}`,
+          url: `data:image/png;base64,${Buffer.from(`image:${input.jobId}`).toString("base64")}`,
           usage: {
             promptTokens: 8,
             completionTokens: 0,
@@ -308,6 +319,7 @@ test("synthesizeSpeech forwards text and voice to OpenRouterMedia", async () => 
   let seen: MediaGenerateInput | undefined;
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) => {
         seen = input;
@@ -352,10 +364,11 @@ test("synthesizeSpeech forwards text and voice to OpenRouterMedia", async () => 
 test("generateVideo records usage for the current user", async () => {
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) =>
         Effect.succeed({
-          url: `https://example.invalid/openrouter-stub/video/${input.jobId}`,
+          url: `data:video/mp4;base64,${Buffer.from(`video:${input.jobId}`).toString("base64")}`,
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -401,11 +414,12 @@ test("generateVideo forwards model and video options to OpenRouterMedia", async 
   let seen: MediaGenerateInput | undefined;
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) => {
         seen = input;
         return Effect.succeed({
-          url: `https://example.invalid/openrouter-stub/video/${input.jobId}`,
+          url: `data:video/mp4;base64,${Buffer.from(`video:${input.jobId}`).toString("base64")}`,
         });
       },
     }),
@@ -454,11 +468,12 @@ test("video, speech, and audio jobs forward the selected model", async () => {
   const seen: Array<MediaGenerateInput> = [];
   const CaptureLive = Layer.mergeAll(
     DurableStreamLive,
+    MemoryObjectStoreLive,
     Layer.succeed(OpenRouterMedia, {
       generate: (input) => {
         seen.push(input);
         return Effect.succeed({
-          url: `https://example.invalid/openrouter-stub/${input.kind}/${input.jobId}`,
+          url: `data:application/octet-stream;base64,${Buffer.from(`${input.kind}:${input.jobId}`).toString("base64")}`,
         });
       },
     }),
@@ -553,7 +568,7 @@ test("JobSubscribe gets queued → running → completed in order", async () => 
     "running",
     "completed",
   ]);
-  expect(result.events[2]?.url?.includes(result.job.id)).toBe(true);
+  expect(result.events[2]?.url?.includes("/media/")).toBe(true);
 });
 
 test("JobSubscribe(afterSeq=n) still receives completed", async () => {
@@ -734,7 +749,7 @@ test("ImageGenerate ChatMessages includes the running job and ChatSubscribe emit
   expect(
     result.after.messages.some(
       (message) =>
-        message.role === "assistant" && message.content.includes(result.job.id),
+        message.role === "assistant" && message.content.includes("/media/"),
     ),
   ).toBe(true);
 });
@@ -767,7 +782,7 @@ test("ImageGenerate persists the prompt and completed image as chat messages", a
   expect(result.stored?.title).toBe("a lake");
   expect(result.rows.map((row) => row.role)).toEqual(["user", "assistant"]);
   expect(result.rows[0]?.content).toBe("a lake");
-  expect(result.rows[1]?.content.includes(result.job.id)).toBe(true);
+  expect(result.rows[1]?.content.includes("/media/")).toBe(true);
 });
 
 test("ImageGenerate on a text chat is VALIDATION", async () => {
@@ -817,7 +832,7 @@ test("VideoGenerate persists the prompt and completed video as chat messages", a
   expect(result.stored?.title).toBe("a wave");
   expect(result.rows.map((row) => row.role)).toEqual(["user", "assistant"]);
   expect(result.rows[0]?.content).toBe("a wave");
-  expect(result.rows[1]?.content.includes(result.job.id)).toBe(true);
+  expect(result.rows[1]?.content.includes("/media/")).toBe(true);
 });
 
 test("media jobs on the wrong chat kind are VALIDATION", async () => {

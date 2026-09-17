@@ -37,6 +37,7 @@ import {
   type OpenRouterUsage,
   toOpenRouterUserContent,
 } from "../../shared/openrouter";
+import { persistMediaUrls, resolveMediaUrls } from "../../shared/persist-media";
 import { persistUsageEvent } from "../../shared/persist-usage";
 import {
   DurableStream,
@@ -362,6 +363,18 @@ const toOpenRouterRole = (
   role === "user" || role === "assistant" || role === "system"
     ? role
     : undefined;
+
+const openRouterUserContent = (content: string) =>
+  Effect.gen(function* () {
+    const decoded = decodeStoredContent(content);
+    if (decoded.images.length === 0) {
+      return toOpenRouterUserContent(content);
+    }
+    const images = yield* resolveMediaUrls(decoded.images).pipe(
+      Effect.mapError(unexpected),
+    );
+    return toOpenRouterUserContent(encodeStoredContent(decoded.text, images));
+  });
 
 export const listChats = (payload?: { readonly kind?: ChatKind }) =>
   Effect.gen(function* () {
@@ -737,7 +750,7 @@ export const sendMessage = (payload: {
         message: "Not a text chat",
       });
     }
-    const images = payload.images ?? [];
+    const images = yield* persistMediaUrls(payload.images ?? [], chat.userId);
     if (payload.content.trim().length === 0 && images.length === 0) {
       return yield* new AppError({
         code: "VALIDATION",
@@ -782,11 +795,14 @@ export const sendMessage = (payload: {
         if (role !== undefined) {
           outgoing.push({
             role,
-            content: toOpenRouterUserContent(row.content),
+            content: yield* openRouterUserContent(row.content),
           });
         }
       }
-      outgoing.push({ role: "user", content: toOpenRouterUserContent(stored) });
+      outgoing.push({
+        role: "user",
+        content: yield* openRouterUserContent(stored),
+      });
 
       const inserted = yield* db
         .insert(messages)

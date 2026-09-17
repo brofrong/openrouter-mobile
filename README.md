@@ -15,6 +15,7 @@
 | Сервер | Bun, Effect v4 |
 | Auth | Better Auth (email/password или OIDC, если задан) |
 | БД | PostgreSQL, Drizzle |
+| Файлы | MinIO (S3). Клиент ходит только на `{BASE_URL}/media/...` |
 
 Пакеты `@openrouter-mobile/*`: `apps/mobile`, `apps/server`, `packages/domain`, `packages/rpc`, `packages/db`.
 
@@ -33,7 +34,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## Разработка
 
-Локально Postgres — обычный `docker compose up -d`. Сервер и Expo — через bun.
+Локально Postgres и MinIO — обычный `docker compose up -d`. Сервер и Expo — через bun.
 
 ```bash
 cp .env.example .env   # OPENROUTER_API_KEY, BASE_URL
@@ -62,6 +63,10 @@ bun run --filter @openrouter-mobile/mobile web
 | `AUTH_DISABLE_SIGNUP` | Запретить регистрацию по email/password |
 | `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Опционально: тогда вход только через OIDC |
 | `BETTER_AUTH_SECRET` | Опционально; иначе секрет пишется в `kv` |
+| `S3_ENDPOINT` | MinIO/S3 API. Локально `http://localhost:9000`, в Docker `http://minio:9000` |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Ключи MinIO (по умолчанию `openrouter` / `openrouter`) |
+| `S3_BUCKET` | Бакет, по умолчанию `media` |
+| `S3_REGION` | Регион S3, по умолчанию `us-east-1` |
 
 Для деплоя ещё `POSTGRES_*`, `DOMAIN`, `ACME_EMAIL`, `IMAGE_TAG`, `WEB_DIR` — см. `.env.example`.
 

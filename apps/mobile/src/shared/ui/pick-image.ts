@@ -1,46 +1,43 @@
 import { Platform } from "react-native";
+import { type NativeUploadFile, uploadMediaFile } from "../upload-media";
 
-const pickImageWeb = (): Promise<string | undefined> =>
+const pickImageWeb = (): Promise<File | undefined> =>
   new Promise((resolve) => {
     const input = document.createElement("input");
     input.accept = "image/*";
     input.type = "file";
     input.onchange = () => {
-      const file = input.files?.[0];
-      if (file === undefined) {
-        resolve(undefined);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        resolve(typeof reader.result === "string" ? reader.result : undefined);
-      };
-      reader.onerror = () => {
-        resolve(undefined);
-      };
-      reader.readAsDataURL(file);
+      resolve(input.files?.[0] ?? undefined);
     };
     input.click();
   });
 
-export const pickImageDataUrl = async (): Promise<string | undefined> => {
-  if (Platform.OS === "web") {
-    return pickImageWeb();
-  }
+const pickImageNative = async (): Promise<NativeUploadFile | undefined> => {
   const ImagePicker = await import("expo-image-picker");
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
     return undefined;
   }
   const result = await ImagePicker.launchImageLibraryAsync({
-    base64: true,
     mediaTypes: ["images"],
     quality: 0.8,
   });
   const asset = result.canceled ? undefined : result.assets[0];
-  if (asset?.base64 === undefined) {
+  if (asset?.uri === undefined) {
     return undefined;
   }
-  const mime = asset.mimeType ?? "image/jpeg";
-  return `data:${mime};base64,${asset.base64}`;
+  return {
+    uri: asset.uri,
+    name: asset.fileName ?? "image.jpg",
+    type: asset.mimeType ?? "image/jpeg",
+  };
+};
+
+export const pickAndUploadImage = async (): Promise<string | undefined> => {
+  const file =
+    Platform.OS === "web" ? await pickImageWeb() : await pickImageNative();
+  if (file === undefined) {
+    return undefined;
+  }
+  return uploadMediaFile(file);
 };

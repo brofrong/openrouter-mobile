@@ -54,8 +54,15 @@ const missingKey = new AppError({
   message: "OPENROUTER_API_KEY is not set",
 });
 
-const stubUrl = (input: MediaGenerateInput): string =>
-  `https://example.invalid/openrouter-stub/${input.kind}/${input.jobId}`;
+const stubUrl = (input: MediaGenerateInput): string => {
+  const mime =
+    input.kind === "image"
+      ? "image/png"
+      : input.kind === "video"
+        ? "video/mp4"
+        : "audio/mpeg";
+  return `data:${mime};base64,${Buffer.from(`${input.kind}:${input.jobId}`).toString("base64")}`;
+};
 
 const stubGenerate = (input: MediaGenerateInput) =>
   Effect.sleep("50 millis").pipe(

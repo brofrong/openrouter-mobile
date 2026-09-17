@@ -16,7 +16,7 @@ Installed in `apps/mobile`: Expo SDK **57.0.22** (`expo@~57.0.22`, `expo-router@
 - WebSocket: `binaryType = "arraybuffer"` (`apps/mobile/src/shared/ws.ts`)
 
 ## Do not
-- Nested `File` in RPC payloads (no HTTP upload route; `AudioGenerate` takes a text prompt)
+- Nested `File` in RPC payloads. Upload binaries with `POST /media`, then pass the returned URL in RPC.
 - Import `apps/server` from `apps/mobile`
 - Install TanStack Query
 - Force root TypeScript 7 onto the Expo app
@@ -115,7 +115,7 @@ Socket.fromWebSocket(acquire) // sets binaryType = "arraybuffer"
 - HTTP RPC: POST `{BASE_URL}/rpc` (NDJSON), `Cookie: await authClient.getCookie()`, native `credentials: "omit"`.
 - Streams: WebSocket `{ws(s)://BASE_URL}/rpc/ws`. Native handshake headers `{ Cookie }`; web uses the browser cookie jar.
 - `expo-secure-store` is native-only. Web auth storage is `localStorage`; the Expo plugin skips SecureStore on web and uses `credentials: "include"` for `/api/auth/*`.
-- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq,media-source,resolve-media-uri}.ts`
+- Files: `apps/mobile/src/shared/{http,ws,rpc,auth-client,runtime,afterSeq,media-source,resolve-media-uri,upload-media}.ts`
 
 ## Native audio (`expo-audio@57.0.5`)
 

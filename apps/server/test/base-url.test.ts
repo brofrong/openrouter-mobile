@@ -55,3 +55,11 @@ test("AppConfig.webDir defaults to /app/web", () => {
 test("AppConfig.webDir reads WEB_DIR", () => {
   expect(parseConfig({ WEB_DIR: "/var/www" }).webDir).toBe("/var/www");
 });
+
+test("AppConfig S3 defaults point at local MinIO", () => {
+  const config = parseConfig({});
+  expect(config.s3Endpoint).toBe("http://localhost:9000");
+  expect(config.s3AccessKeyId).toBe("openrouter");
+  expect(config.s3Bucket).toBe("media");
+  expect(config.s3Region).toBe("us-east-1");
+});

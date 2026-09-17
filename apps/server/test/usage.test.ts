@@ -17,6 +17,10 @@ import { summarizeUsage } from "../src/features/usage/UsageLive";
 import { CurrentSession } from "../src/shared/AuthMiddleware";
 import type { Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
+import {
+  MemoryObjectStoreLive,
+  type ObjectStore,
+} from "../src/shared/object-store";
 
 if (process.env.DATABASE_URL === undefined) {
   process.env.DATABASE_URL =
@@ -48,6 +52,7 @@ const OpenRouterUsageMockLive = Layer.succeed(OpenRouterChat, {
 const TestLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterUsageMockLive,
+  MemoryObjectStoreLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const makeSession = (userId: string, email: string): Session =>
@@ -77,7 +82,7 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | Scope.Scope
+    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(TestLive)));

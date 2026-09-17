@@ -48,6 +48,10 @@ import {
 } from "../src/shared/AuthMiddleware";
 import { Auth, createAuth, type Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
+import {
+  MemoryObjectStoreLive,
+  type ObjectStore,
+} from "../src/shared/object-store";
 import { isUsableOpenRouterKeyValue } from "../src/shared/openrouter";
 
 if (process.env.DATABASE_URL === undefined) {
@@ -117,13 +121,16 @@ const OpenRouterMockLive = Layer.succeed(OpenRouterChat, {
   listModels: () => Effect.succeed(emptyCatalogPage),
 });
 
-const TestLive = Layer.mergeAll(DurableStreamLive, OpenRouterMockLive).pipe(
-  Layer.provideMerge(DbLive),
-);
+const TestLive = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterMockLive,
+  MemoryObjectStoreLive,
+).pipe(Layer.provideMerge(DbLive));
 
 const RealOpenRouterLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterChatLive,
+  MemoryObjectStoreLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const waitUntilLive = Effect.sleep("150 millis");
@@ -155,7 +162,7 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | Scope.Scope
+    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(TestLive)));
@@ -164,7 +171,7 @@ const runReal = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | Scope.Scope
+    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(
@@ -248,15 +255,17 @@ const OpenRouterFailLive = Layer.succeed(OpenRouterChat, {
   listModels: () => Effect.succeed(emptyCatalogPage),
 });
 
-const FailLive = Layer.mergeAll(DurableStreamLive, OpenRouterFailLive).pipe(
-  Layer.provideMerge(DbLive),
-);
+const FailLive = Layer.mergeAll(
+  DurableStreamLive,
+  OpenRouterFailLive,
+  MemoryObjectStoreLive,
+).pipe(Layer.provideMerge(DbLive));
 
 const runFail = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | Scope.Scope
+    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(FailLive)));
@@ -300,6 +309,7 @@ test("listModels forwards outputModality to OpenRouterChat", async () => {
       Effect.provide(
         Layer.mergeAll(
           DurableStreamLive,
+          MemoryObjectStoreLive,
           Layer.succeed(OpenRouterChat, {
             complete: () => Effect.succeed(Stream.empty),
             listModels: (options) => {
@@ -540,9 +550,11 @@ test("ChatSend unlocks generating if the user event cannot be appended", async (
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.mergeAll(FailAppendLive, OpenRouterMockLive).pipe(
-          Layer.provideMerge(DbLive),
-        ),
+        Layer.mergeAll(
+          FailAppendLive,
+          OpenRouterMockLive,
+          MemoryObjectStoreLive,
+        ).pipe(Layer.provideMerge(DbLive)),
       ),
     ),
   );
