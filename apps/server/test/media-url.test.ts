@@ -10,6 +10,7 @@ import {
   parseDataUrl,
   publicMediaUrl,
   sanitizeUserSegment,
+  storedContentType,
   toDataUrl,
 } from "../src/shared/media-url";
 
@@ -49,6 +50,17 @@ test("makeObjectKey uses a safe user prefix and mime extension", () => {
   expect(sanitizeUserSegment("user/../id")).toBe("userid");
   expect(makeObjectKey("user-1", "image/webp", "id")).toBe("user-1/id.webp");
   expect(extensionForMime("video/webm")).toBe("webm");
+  expect(extensionForMime("application/pdf")).toBe("pdf");
+  expect(extensionForMime("text/csv")).toBe("csv");
+});
+
+test("storedContentType recovers image mime when storage reports octet-stream", () => {
+  expect(storedContentType("user/shot.png", "")).toBe("image/png");
+  expect(storedContentType("user/shot.png", "application/octet-stream")).toBe(
+    "image/png",
+  );
+  expect(storedContentType("user/shot.png", "image/jpeg")).toBe("image/jpeg");
+  expect(storedContentType("user/notes.txt", "")).toBe("text/plain");
 });
 
 test("parseByteRange handles suffix and closed ranges", () => {

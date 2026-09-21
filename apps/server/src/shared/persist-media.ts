@@ -11,6 +11,7 @@ import {
   objectKeyFromUrl,
   parseDataUrl,
   publicMediaUrl,
+  storedContentType,
   toDataUrl,
 } from "./media-url";
 import { ObjectStore, ObjectStoreError } from "./object-store";
@@ -64,6 +65,8 @@ const persistBytes = (options: {
       .pipe(Effect.mapError(storeFailed));
     return publicMediaUrl(config.baseUrl, key);
   });
+
+export const persistMediaBytes = persistBytes;
 
 const persistRemoteUrl = (url: string, userId: string) =>
   Effect.tryPromise({
@@ -163,7 +166,7 @@ export const resolveMediaUrl = (url: string) =>
     }
     const store = yield* ObjectStore;
     const stored = yield* store.get(key).pipe(Effect.mapError(storeFailed));
-    return toDataUrl(stored.body, stored.contentType);
+    return toDataUrl(stored.body, storedContentType(key, stored.contentType));
   });
 
 export const resolveMediaUrls = (urls: ReadonlyArray<string>) =>

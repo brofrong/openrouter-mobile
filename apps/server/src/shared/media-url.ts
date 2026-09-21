@@ -80,6 +80,23 @@ export const extensionForMime = (mime: string): string => {
       return "webm";
     case "video/quicktime":
       return "mov";
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      return "xlsx";
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      return "docx";
+    case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+      return "pptx";
+    case "application/pdf":
+      return "pdf";
+    case "text/csv":
+    case "application/csv":
+      return "csv";
+    case "text/plain":
+      return "txt";
+    case "text/markdown":
+      return "md";
+    case "application/json":
+      return "json";
     default:
       if (normalized.startsWith("video/")) {
         return "mp4";
@@ -94,13 +111,101 @@ export const extensionForMime = (mime: string): string => {
   }
 };
 
+export const DOCUMENT_MIME = {
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  pdf: "application/pdf",
+  csv: "text/csv",
+  txt: "text/plain",
+  md: "text/markdown",
+} as const;
+
+const DOCUMENT_MIMES = new Set<string>([
+  DOCUMENT_MIME.xlsx,
+  DOCUMENT_MIME.docx,
+  DOCUMENT_MIME.pptx,
+  DOCUMENT_MIME.pdf,
+  DOCUMENT_MIME.csv,
+  "application/csv",
+  DOCUMENT_MIME.txt,
+  DOCUMENT_MIME.md,
+  "application/json",
+]);
+
 export const isAllowedMediaMime = (mime: string): boolean => {
   const normalized = mime.toLowerCase().split(";")[0]?.trim() ?? "";
   return (
     normalized.startsWith("image/") ||
     normalized.startsWith("audio/") ||
-    normalized.startsWith("video/")
+    normalized.startsWith("video/") ||
+    DOCUMENT_MIMES.has(normalized)
   );
+};
+
+export const mimeFromFilename = (name: string): string | undefined => {
+  const lower = name.trim().toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  if (dot < 0) {
+    return undefined;
+  }
+  switch (lower.slice(dot)) {
+    case ".xlsx":
+      return DOCUMENT_MIME.xlsx;
+    case ".docx":
+      return DOCUMENT_MIME.docx;
+    case ".pptx":
+      return DOCUMENT_MIME.pptx;
+    case ".pdf":
+      return DOCUMENT_MIME.pdf;
+    case ".csv":
+      return DOCUMENT_MIME.csv;
+    case ".txt":
+      return DOCUMENT_MIME.txt;
+    case ".md":
+    case ".markdown":
+      return DOCUMENT_MIME.md;
+    case ".json":
+      return "application/json";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    default:
+      return undefined;
+  }
+};
+
+const GENERIC_BINARY_MIME = new Set([
+  "",
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
+
+/** MinIO/Bun often omit Content-Type; recover it from the object key. */
+export const storedContentType = (key: string, reported: string): string => {
+  const trimmed = reported.split(";")[0]?.trim() ?? "";
+  const normalized = trimmed.toLowerCase();
+  if (!GENERIC_BINARY_MIME.has(normalized)) {
+    return normalized;
+  }
+  return (
+    mimeFromFilename(key) ??
+    (normalized.length > 0 ? normalized : "application/octet-stream")
+  );
+};
+
+export const sanitizeDownloadFilename = (value: string): string | undefined => {
+  const trimmed = value.trim().replaceAll(/[/\\]/g, "");
+  if (trimmed.length === 0 || trimmed.length > 200 || trimmed.includes("..")) {
+    return undefined;
+  }
+  return trimmed;
 };
 
 export const isObjectKey = (key: string): boolean =>

@@ -13,6 +13,7 @@
     "@better-auth/expo": "1.7.4",
     "@effect/platform-bun": "4.0.0-rc.113",
     "@effect/sql-pg": "4.0.0-rc.113",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@openrouter-mobile/db": "workspace:*",
     "@openrouter-mobile/domain": "workspace:*",
     "@openrouter-mobile/rpc": "workspace:*",

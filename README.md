@@ -48,6 +48,16 @@ bun run --filter @openrouter-mobile/mobile web
 
 Если порт `3000` занят — другой `PORT` и тот же origin в `BASE_URL`. Auth (`/api/auth/*`), RPC и WebSocket считаются от него.
 
+## Python sandbox
+
+Сервис `sandbox` в compose (порт `8090`) — готовый образ `ghcr.io/brofrong/python-mcp-sandbox:sha256-f9de48d74ff93146c5278f6e2aef9e42444a9aa05212bbcac2b4f674998e748c`. Бэкенд ходит в MCP Streamable HTTP `/mcp` (Bearer `SANDBOX_SECRET`). Модели отдаётся tool `execute` (`{ code }`); `session_id` подставляет сервер.
+
+## DuckDuckGo MCP
+
+Сервис `duckduckgo` в compose (порт `8000`, образ [`mcp/duckduckgo`](https://hub.docker.com/r/mcp/duckduckgo)). Streamable HTTP на `/mcp`. Сервер подхватывает tools `search` и `fetch_content` и отдаёт их модели вместе с `generate_video` / sandbox `execute`.
+
+Локально: `MCP_URL=http://localhost:8000/mcp`. В Docker: `http://duckduckgo:8000/mcp`. Без `MCP_URL` MCP выключен.
+
 ## Переменные
 
 Скопировать `.env.example` в `.env`.
@@ -67,6 +77,10 @@ bun run --filter @openrouter-mobile/mobile web
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Ключи MinIO (по умолчанию `openrouter` / `openrouter`) |
 | `S3_BUCKET` | Бакет, по умолчанию `media` |
 | `S3_REGION` | Регион S3, по умолчанию `us-east-1` |
+| `SANDBOX_URL` | Python sandbox. Локально `http://localhost:8090` |
+| `SANDBOX_SECRET` | Bearer-секрет контейнера sandbox |
+| `MCP_URL` | Streamable HTTP MCP, например DuckDuckGo. Локально `http://localhost:8000/mcp` |
+| `MCP_SECRET` | Опциональный Bearer для MCP. Для DuckDuckGo не нужен |
 
 Для деплоя ещё `POSTGRES_*`, `DOMAIN`, `ACME_EMAIL`, `IMAGE_TAG`, `WEB_DIR` — см. `.env.example`.
 

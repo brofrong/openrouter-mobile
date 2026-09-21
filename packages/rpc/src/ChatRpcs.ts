@@ -10,6 +10,8 @@ import {
   MessageId,
   OutputModality,
   ReasoningEffort,
+  StoredChatFile,
+  VideoToolOptions,
 } from "@openrouter-mobile/domain";
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
@@ -75,6 +77,8 @@ export class ChatRpcs extends RpcGroup.make(
       model: Schema.optionalKey(Schema.String),
       effort: Schema.optionalKey(ReasoningEffort),
       images: Schema.optionalKey(Schema.Array(Schema.String)),
+      files: Schema.optionalKey(Schema.Array(StoredChatFile)),
+      video: Schema.optionalKey(VideoToolOptions),
     },
     success: Message,
     error: AppError,

@@ -11,6 +11,7 @@ import {
   isUsableOpenRouterKey,
   type OpenRouterMessage,
   type OpenRouterStreamPart,
+  type OpenRouterTool,
   openRouterTokenStream,
 } from "../../shared/openrouter";
 import { openRouterListModels } from "../../shared/openrouter-models";
@@ -20,6 +21,7 @@ export type { OpenRouterMessage, OpenRouterStreamPart };
 export type OpenRouterCompleteOptions = {
   readonly model?: string;
   readonly effort?: ReasoningEffort;
+  readonly tools?: ReadonlyArray<OpenRouterTool>;
 };
 
 export type OpenRouterListModelsOptions = {
@@ -65,6 +67,7 @@ export const makeOpenRouterChat = Effect.gen(function* () {
         referer: config.baseUrl,
         messages,
         ...(options?.effort === undefined ? {} : { effort: options.effort }),
+        ...(options?.tools === undefined ? {} : { tools: options.tools }),
       });
     },
     listModels: (options) => {

@@ -6,6 +6,8 @@ import {
   ChatUserEvent,
   type MessageId,
   type ReasoningEffort,
+  type StoredChatFile,
+  VideoToolOptions,
   withChatTitle,
 } from "@openrouter-mobile/domain";
 import { Effect } from "effect";
@@ -84,6 +86,7 @@ export function ChatScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [composer, setComposer] = useState("");
   const [attachments, setAttachments] = useState<ReadonlyArray<string>>([]);
+  const [files, setFiles] = useState<ReadonlyArray<StoredChatFile>>([]);
   const [busy, setBusy] = useState(false);
   const [streamReady, setStreamReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -427,12 +430,18 @@ export function ChatScreen() {
 
   const send = () => {
     const content = composer.trim();
-    if (content.length === 0 && attachments.length === 0) {
+    if (
+      content.length === 0 &&
+      attachments.length === 0 &&
+      files.length === 0
+    ) {
       return;
     }
     const images = attachments;
+    const attachedFiles = files;
     setComposer("");
     setAttachments([]);
+    setFiles([]);
     setBusy(true);
     pinToBottom();
     setThread((current) => ({
@@ -457,6 +466,14 @@ export function ChatScreen() {
             ? {}
             : { effort: selectedModel.effort }),
           ...(images.length === 0 ? {} : { images }),
+          ...(attachedFiles.length === 0 ? {} : { files: attachedFiles }),
+          ...(images.length === 0
+            ? {}
+            : {
+                video: new VideoToolOptions({
+                  inputReferences: images,
+                }),
+              }),
         });
       }).pipe(
         Effect.match({
@@ -654,9 +671,11 @@ export function ChatScreen() {
         busy={busy}
         composer={composer}
         images={attachments}
+        files={files}
         selectedModel={selectedModelForBar}
         onComposerChange={setComposer}
         onImagesChange={setAttachments}
+        onFilesChange={setFiles}
         onSend={send}
       />
     </KeyboardScreen>

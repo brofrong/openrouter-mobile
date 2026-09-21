@@ -17,9 +17,11 @@ import { AppConfig } from "../shared/config";
 import { DbLive } from "../shared/db";
 import { loadRepoEnv } from "../shared/loadEnv";
 import { MediaHttpLive } from "../shared/MediaHttp";
+import { McpClientLive } from "../shared/mcp-client";
 import { applyMigrations } from "../shared/migrate";
 import { ObjectStoreLive } from "../shared/object-store";
 import { corsAllowedOrigins } from "../shared/origins";
+import { PythonSandboxLive } from "../shared/python-sandbox";
 import { BunRuntime } from "../shared/runtime";
 import { WebLive } from "../shared/web";
 import { ServerRpcs } from "./ServerRpcs";
@@ -43,6 +45,8 @@ const FeatureInfra = Layer.mergeAll(
   OpenRouterChatLive,
   OpenRouterMediaLive,
   ObjectStoreLive,
+  PythonSandboxLive,
+  McpClientLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const RpcRoutes = HttpRouter.cors({

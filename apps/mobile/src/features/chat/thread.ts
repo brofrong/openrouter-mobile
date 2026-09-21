@@ -1,22 +1,35 @@
 import type {
+  ChatJobEvent,
   ChatMessagePage,
   ChatStreamEvent,
+  GenerationJob,
   Message,
 } from "@openrouter-mobile/domain";
+import { isVideoUrl } from "@openrouter-mobile/domain";
 
 export const CHAT_MESSAGE_PAGE_SIZE = 30;
+
+export type ThreadJobStatus = "queued" | "running" | "completed" | "failed";
 
 export type ThreadItem = {
   readonly id: string;
   readonly role: "user" | "assistant" | "system";
   readonly content: string;
+  readonly jobId?: string;
+  readonly status?: ThreadJobStatus;
+  readonly url?: string;
+  readonly error?: string;
 };
 
-export const toThreadItem = (message: Message): ThreadItem => ({
-  id: message.id,
-  role: message.role,
-  content: message.content,
-});
+export const toThreadItem = (message: Message): ThreadItem => {
+  const video = isVideoUrl(message.content);
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    ...(video ? { url: message.content, status: "completed" as const } : {}),
+  };
+};
 
 export const isServerMessageId = (id: string): boolean =>
   id !== "draft" && !id.startsWith("local-");
@@ -105,9 +118,11 @@ export const applyChatStreamEvent = (
     case "done":
       return {
         ...withoutError(state),
-        messages: hasMessageId(state.messages, event.message.id)
-          ? state.messages
-          : [...state.messages, toThreadItem(event.message)],
+        messages:
+          event.message.content.length === 0 ||
+          hasMessageId(state.messages, event.message.id)
+            ? state.messages
+            : [...state.messages, toThreadItem(event.message)],
         draft: "",
         generating: false,
       };
@@ -119,13 +134,72 @@ export const applyChatStreamEvent = (
         error: event.error,
       };
     case "title":
-    case "job":
       return state;
+    case "job":
+      return {
+        ...withoutError(state),
+        messages: applyJobEvent(state.messages, event),
+      };
   }
 };
 
+const jobItem = (job: {
+  readonly id: string;
+  readonly status: ThreadJobStatus;
+  readonly resultUrl?: string;
+  readonly error?: string;
+}): ThreadItem => ({
+  id: `job-${job.id}`,
+  role: "assistant",
+  content: "",
+  jobId: job.id,
+  status: job.status,
+  ...(job.resultUrl === undefined ? {} : { url: job.resultUrl }),
+  ...(job.error === undefined ? {} : { error: job.error }),
+});
+
+const applyJobEvent = (
+  messages: ReadonlyArray<ThreadItem>,
+  event: ChatJobEvent,
+): ReadonlyArray<ThreadItem> => {
+  const patch = {
+    status: event.status,
+    ...(event.url === undefined ? {} : { url: event.url }),
+    ...(event.error === undefined ? {} : { error: event.error }),
+  };
+  const index = messages.findIndex(
+    (item) => item.role === "assistant" && item.jobId === event.jobId,
+  );
+  if (index >= 0) {
+    return messages.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    );
+  }
+  return [...messages, jobItem({ id: event.jobId, ...patch })];
+};
+
+const hydrateJobs = (
+  messages: ReadonlyArray<ThreadItem>,
+  jobs: ReadonlyArray<GenerationJob>,
+): ReadonlyArray<ThreadItem> => {
+  const seen = new Set(
+    messages.flatMap((item) => (item.jobId === undefined ? [] : [item.jobId])),
+  );
+  const extra = jobs
+    .filter((job) => !seen.has(job.id))
+    .map((job) =>
+      jobItem({
+        id: job.id,
+        status: job.status,
+        ...(job.resultUrl === undefined ? {} : { resultUrl: job.resultUrl }),
+        ...(job.error === undefined ? {} : { error: job.error }),
+      }),
+    );
+  return extra.length === 0 ? messages : [...messages, ...extra];
+};
+
 export const hydrateFromPage = (page: ChatMessagePage): ChatThreadState => ({
-  messages: page.messages.map(toThreadItem),
+  messages: hydrateJobs(page.messages.map(toThreadItem), page.jobs),
   draft: page.inProgress ?? "",
   generating: page.generating,
 });

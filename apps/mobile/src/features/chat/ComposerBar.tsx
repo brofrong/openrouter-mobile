@@ -1,3 +1,4 @@
+import type { StoredChatFile } from "@openrouter-mobile/domain";
 import { useState } from "react";
 import { XStack, YStack } from "tamagui";
 import { modelHasEffort } from "../../entities/model/catalog";
@@ -11,8 +12,10 @@ type ComposerBarProps = {
   readonly composer: string;
   readonly busy: boolean;
   readonly images: ReadonlyArray<string>;
+  readonly files?: ReadonlyArray<StoredChatFile>;
   readonly onComposerChange: (value: string) => void;
   readonly onImagesChange: (images: ReadonlyArray<string>) => void;
+  readonly onFilesChange?: (files: ReadonlyArray<StoredChatFile>) => void;
   readonly onSend: () => void;
   readonly selectedModel: SelectedModelState;
 };
@@ -21,8 +24,10 @@ export function ComposerBar({
   composer,
   busy,
   images,
+  files = [],
   onComposerChange,
   onImagesChange,
+  onFilesChange,
   onSend,
   selectedModel,
 }: ComposerBarProps) {
@@ -33,7 +38,7 @@ export function ComposerBar({
 
   return (
     <YStack>
-      <XStack items="center" gap="$2" px="$3" pt="$2">
+      <XStack items="center" flexWrap="wrap" gap="$2" px="$3" pt="$2">
         <ModelChip
           model={model}
           onPress={() => {
@@ -51,10 +56,13 @@ export function ComposerBar({
       </XStack>
       <XStack items="flex-end" p="$3" gap="$2">
         <ComposerAttach
+          allowFiles
           disabled={busy}
+          files={files}
           images={images}
           max={4}
           onChange={onImagesChange}
+          onFilesChange={onFilesChange}
         />
         <ComposerField
           accessibilityLabel="Send"

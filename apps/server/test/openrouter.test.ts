@@ -7,9 +7,11 @@ import {
   OpenRouterChatLive,
 } from "../src/features/chat/OpenRouterChat";
 import {
+  assembleToolCalls,
   audioDataUrl,
   isUsableOpenRouterKey,
   isUsableOpenRouterKeyValue,
+  openRouterApiErrorMessage,
   openRouterAudioBody,
   openRouterChatBody,
   openRouterGenerateAudio,
@@ -28,10 +30,63 @@ import {
   parseOpenRouterVideoJob,
   toOpenRouterUserContent,
 } from "../src/shared/openrouter";
+import { GENERATE_VIDEO_TOOL } from "../src/shared/video-tool";
 
 const hasRealOpenRouterKey = isUsableOpenRouterKeyValue(
   process.env.OPENROUTER_API_KEY ?? "",
 );
+
+test("openRouterChatBody includes tools when provided", () => {
+  expect(
+    openRouterChatBody({
+      model: "openai/gpt-4o-mini",
+      messages: [{ role: "user", content: "make a video" }],
+      tools: [GENERATE_VIDEO_TOOL],
+    }),
+  ).toEqual({
+    model: "openai/gpt-4o-mini",
+    messages: [{ role: "user", content: "make a video" }],
+    stream: true,
+    usage: { include: true },
+    tools: [GENERATE_VIDEO_TOOL],
+  });
+});
+
+test("parseOpenRouterSseParts extracts streamed tool call deltas", () => {
+  expect(
+    parseOpenRouterSseParts(
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"generate_video","arguments":"{\\"prompt\\":"}}]}}]}',
+    ),
+  ).toEqual([
+    {
+      _tag: "tool_call_delta",
+      index: 0,
+      id: "call_1",
+      name: "generate_video",
+      arguments: '{"prompt":',
+    },
+  ]);
+});
+
+test("assembleToolCalls concatenates argument chunks", () => {
+  expect(
+    assembleToolCalls([
+      {
+        index: 0,
+        id: "call_1",
+        name: "generate_video",
+        arguments: '{"prompt":',
+      },
+      { index: 0, arguments: '"a wave"}' },
+    ]),
+  ).toEqual([
+    {
+      id: "call_1",
+      name: "generate_video",
+      arguments: '{"prompt":"a wave"}',
+    },
+  ]);
+});
 
 test("openRouterChatBody omits reasoning unless effort is set", () => {
   expect(
@@ -153,6 +208,75 @@ test("openRouterTokenStream reads tokens from a mocked HTTP SSE body", async () 
   ]);
 });
 
+test("openRouterApiErrorMessage unwraps provider raw JSON", () => {
+  expect(
+    openRouterApiErrorMessage({
+      error: {
+        message: "Provider returned error",
+        metadata: {
+          raw: JSON.stringify({
+            error: {
+              message:
+                "Invalid 'input[0].content[1].image_url'. Expected a base64-encoded data URL with an image MIME type",
+            },
+          }),
+        },
+      },
+    }),
+  ).toBe(
+    "Invalid 'input[0].content[1].image_url'. Expected a base64-encoded data URL with an image MIME type",
+  );
+});
+
+test("openRouterTokenStream surfaces the OpenRouter error body", async () => {
+  const mockFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          message: "Provider returned error",
+          metadata: {
+            raw: JSON.stringify({
+              error: {
+                message:
+                  "Expected a base64-encoded data URL with an image MIME type",
+              },
+            }),
+          },
+        },
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      },
+    )) as unknown as typeof fetch;
+
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient;
+      const stream = yield* openRouterTokenStream({
+        http,
+        apiKey: Redacted.make("test-key"),
+        model: "openai/gpt-4o-mini",
+        referer: "http://localhost:3000",
+        messages: [{ role: "user", content: "hi" }],
+      });
+      return yield* Stream.runCollect(stream);
+    }).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, mockFetch),
+      Effect.provide(FetchHttpClient.layer),
+      Effect.result,
+    ),
+  );
+
+  expect(Result.isFailure(result)).toBe(true);
+  if (Result.isFailure(result) && result.failure instanceof AppError) {
+    expect(result.failure.code).toBe("OPENROUTER");
+    expect(result.failure.message).toBe(
+      "Expected a base64-encoded data URL with an image MIME type",
+    );
+  }
+});
+
 test("openRouterImageBody includes optional image fields", () => {
   expect(
     openRouterImageBody({
@@ -253,6 +377,12 @@ test("openRouterVideoBody includes optional video fields", () => {
       resolution: "1080p",
       duration: 8,
       generateAudio: false,
+      size: "1280x720",
+      seed: 11,
+      inputReferences: ["https://example.com/ref.png"],
+      frameImages: [
+        { url: "https://example.com/first.png", frameType: "first_frame" },
+      ],
     }),
   ).toEqual({
     model: "google/veo-3.1",
@@ -261,6 +391,21 @@ test("openRouterVideoBody includes optional video fields", () => {
     resolution: "1080p",
     duration: 8,
     generate_audio: false,
+    size: "1280x720",
+    seed: 11,
+    input_references: [
+      {
+        type: "image_url",
+        image_url: { url: "https://example.com/ref.png" },
+      },
+    ],
+    frame_images: [
+      {
+        type: "image_url",
+        image_url: { url: "https://example.com/first.png" },
+        frame_type: "first_frame",
+      },
+    ],
   });
 });
 

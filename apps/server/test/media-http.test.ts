@@ -87,6 +87,27 @@ test("GET /media/* rejects path traversal", async () => {
   );
 });
 
+test("GET /media/* sets Content-Disposition from filename query", async () => {
+  await withHandler(
+    async (store) => {
+      await Effect.runPromise(
+        store.put("user/doc.xlsx", new Uint8Array([1, 2]), "application/pdf"),
+      );
+    },
+    async (handler) => {
+      const response = await handler(
+        new Request(
+          "http://localhost/media/user/doc.xlsx?filename=report.xlsx",
+        ),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-disposition")).toBe(
+        'attachment; filename="report.xlsx"',
+      );
+    },
+  );
+});
+
 test("POST /media requires a session", async () => {
   await withHandler(
     () => undefined,

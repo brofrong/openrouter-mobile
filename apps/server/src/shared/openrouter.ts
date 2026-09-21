@@ -61,9 +61,51 @@ export type OpenRouterContent =
   | string
   | ReadonlyArray<OpenRouterTextPart | OpenRouterImagePart>;
 
-export type OpenRouterMessage = {
-  readonly role: "user" | "assistant" | "system";
-  readonly content: OpenRouterContent;
+export type OpenRouterTool = {
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly description?: string;
+    readonly parameters?: unknown;
+  };
+};
+
+export type OpenRouterToolCall = {
+  readonly id: string;
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly arguments: string;
+  };
+};
+
+export type OpenRouterMessage =
+  | {
+      readonly role: "user" | "system";
+      readonly content: OpenRouterContent;
+    }
+  | {
+      readonly role: "assistant";
+      readonly content: OpenRouterContent | null;
+      readonly tool_calls?: ReadonlyArray<OpenRouterToolCall>;
+    }
+  | {
+      readonly role: "tool";
+      readonly tool_call_id: string;
+      readonly content: string;
+    };
+
+export type OpenRouterToolCallDelta = {
+  readonly index: number;
+  readonly id?: string;
+  readonly name?: string;
+  readonly arguments?: string;
+};
+
+export type OpenRouterAssembledToolCall = {
+  readonly id: string;
+  readonly name: string;
+  readonly arguments: string;
 };
 
 export const toOpenRouterUserContent = (content: string): OpenRouterContent => {
@@ -90,7 +132,14 @@ export type OpenRouterUsage = {
 
 export type OpenRouterStreamPart =
   | { readonly _tag: "text"; readonly text: string }
-  | { readonly _tag: "usage"; readonly usage: OpenRouterUsage };
+  | { readonly _tag: "usage"; readonly usage: OpenRouterUsage }
+  | {
+      readonly _tag: "tool_call_delta";
+      readonly index: number;
+      readonly id?: string;
+      readonly name?: string;
+      readonly arguments?: string;
+    };
 
 export type OpenRouterAudioStreamPart =
   | { readonly _tag: "audio"; readonly data: string }
@@ -100,6 +149,7 @@ export const openRouterChatBody = (options: {
   readonly model: string;
   readonly messages: ReadonlyArray<OpenRouterMessage>;
   readonly effort?: ReasoningEffort;
+  readonly tools?: ReadonlyArray<OpenRouterTool>;
 }) => ({
   model: options.model,
   messages: options.messages,
@@ -108,6 +158,9 @@ export const openRouterChatBody = (options: {
   ...(options.effort === undefined
     ? {}
     : { reasoning: { effort: options.effort } }),
+  ...(options.tools === undefined || options.tools.length === 0
+    ? {}
+    : { tools: options.tools }),
 });
 
 export const openRouterImageBody = (options: {
@@ -144,6 +197,11 @@ export const openRouterImageBody = (options: {
       }),
 });
 
+export type OpenRouterFrameImage = {
+  readonly url: string;
+  readonly frameType: "first_frame" | "last_frame";
+};
+
 export const openRouterVideoBody = (options: {
   readonly model: string;
   readonly prompt: string;
@@ -151,6 +209,10 @@ export const openRouterVideoBody = (options: {
   readonly resolution?: string;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
+  readonly inputReferences?: ReadonlyArray<string>;
+  readonly frameImages?: ReadonlyArray<OpenRouterFrameImage>;
 }) => ({
   model: options.model,
   prompt: options.prompt,
@@ -164,6 +226,26 @@ export const openRouterVideoBody = (options: {
   ...(options.generateAudio === undefined
     ? {}
     : { generate_audio: options.generateAudio }),
+  ...(options.size === undefined ? {} : { size: options.size }),
+  ...(options.seed === undefined ? {} : { seed: options.seed }),
+  ...(options.inputReferences === undefined ||
+  options.inputReferences.length === 0
+    ? {}
+    : {
+        input_references: options.inputReferences.map((url) => ({
+          type: "image_url" as const,
+          image_url: { url },
+        })),
+      }),
+  ...(options.frameImages === undefined || options.frameImages.length === 0
+    ? {}
+    : {
+        frame_images: options.frameImages.map((image) => ({
+          type: "image_url" as const,
+          image_url: { url: image.url },
+          frame_type: image.frameType,
+        })),
+      }),
 });
 
 const imageUrlFromRecord = (value: unknown): string | undefined => {
@@ -398,6 +480,67 @@ export const parseOpenRouterUsage = (
   };
 };
 
+const toolCallDeltasFromUnknown = (
+  value: unknown,
+): ReadonlyArray<OpenRouterToolCallDelta> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const deltas: Array<OpenRouterToolCallDelta> = [];
+  for (const item of value) {
+    if (item === null || typeof item !== "object") {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const index = finiteNumber(record.index);
+    const fn =
+      record.function !== null && typeof record.function === "object"
+        ? (record.function as Record<string, unknown>)
+        : undefined;
+    const id = stringField(record.id);
+    const name = fn === undefined ? undefined : stringField(fn.name);
+    const args = fn === undefined ? undefined : stringField(fn.arguments);
+    if (
+      !Number.isInteger(index) ||
+      (id === undefined && name === undefined && args === undefined)
+    ) {
+      continue;
+    }
+    deltas.push({
+      index,
+      ...(id === undefined ? {} : { id }),
+      ...(name === undefined ? {} : { name }),
+      ...(args === undefined ? {} : { arguments: args }),
+    });
+  }
+  return deltas;
+};
+
+export const assembleToolCalls = (
+  deltas: ReadonlyArray<OpenRouterToolCallDelta>,
+): ReadonlyArray<OpenRouterAssembledToolCall> => {
+  const byIndex = new Map<
+    number,
+    { id: string; name: string; arguments: string }
+  >();
+  for (const delta of deltas) {
+    const current = byIndex.get(delta.index) ?? {
+      id: "",
+      name: "",
+      arguments: "",
+    };
+    byIndex.set(delta.index, {
+      id: delta.id ?? current.id,
+      name: delta.name ?? current.name,
+      arguments: `${current.arguments}${delta.arguments ?? ""}`,
+    });
+  }
+  return [...byIndex.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([, value]) => value)
+    .filter((value) => value.name.length > 0);
+};
+
 export const parseOpenRouterSseParts = (
   line: string,
 ): ReadonlyArray<OpenRouterStreamPart> => {
@@ -411,13 +554,27 @@ export const parseOpenRouterSseParts = (
   }
   try {
     const json = JSON.parse(data) as {
-      choices?: ReadonlyArray<{ delta?: { content?: unknown } }>;
+      choices?: ReadonlyArray<{
+        delta?: { content?: unknown; tool_calls?: unknown };
+      }>;
       usage?: unknown;
     };
     const parts: Array<OpenRouterStreamPart> = [];
-    const content = json.choices?.[0]?.delta?.content;
+    const delta = json.choices?.[0]?.delta;
+    const content = delta?.content;
     if (typeof content === "string" && content.length > 0) {
       parts.push({ _tag: "text", text: content });
+    }
+    for (const toolDelta of toolCallDeltasFromUnknown(delta?.tool_calls)) {
+      parts.push({
+        _tag: "tool_call_delta",
+        index: toolDelta.index,
+        ...(toolDelta.id === undefined ? {} : { id: toolDelta.id }),
+        ...(toolDelta.name === undefined ? {} : { name: toolDelta.name }),
+        ...(toolDelta.arguments === undefined
+          ? {}
+          : { arguments: toolDelta.arguments }),
+      });
     }
     const usage = parseOpenRouterUsage(json.usage);
     if (usage !== undefined) {
@@ -487,6 +644,51 @@ const openRouterFailed = (message: string) =>
     message,
   });
 
+const asRecord = (
+  value: unknown,
+): { readonly [key: string]: unknown } | undefined =>
+  value !== null && typeof value === "object"
+    ? (value as { readonly [key: string]: unknown })
+    : undefined;
+
+export const openRouterApiErrorMessage = (
+  body: unknown,
+): string | undefined => {
+  const error = asRecord(body)?.error;
+  if (typeof error === "string" && error.length > 0) {
+    return error;
+  }
+  const record = asRecord(error);
+  if (record === undefined) {
+    return undefined;
+  }
+  const metadata = asRecord(record.metadata);
+  const raw = metadata?.raw;
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const nested = openRouterApiErrorMessage(JSON.parse(raw) as unknown);
+      if (nested !== undefined) {
+        return nested;
+      }
+    } catch {
+      // Provider raw is not JSON; keep the outer message.
+    }
+  }
+  return typeof record.message === "string" && record.message.length > 0
+    ? record.message
+    : undefined;
+};
+
+const failOpenRouterResponse = (
+  response: HttpClientResponse.HttpClientResponse,
+  fallback: string,
+) =>
+  response.json.pipe(
+    Effect.map((body) => openRouterApiErrorMessage(body) ?? fallback),
+    Effect.orElseSucceed(() => fallback),
+    Effect.flatMap((message) => openRouterFailed(message)),
+  );
+
 export const openRouterTokenStream = (options: {
   readonly http: HttpClient.HttpClient;
   readonly apiKey: Redacted.Redacted<string>;
@@ -494,6 +696,7 @@ export const openRouterTokenStream = (options: {
   readonly referer: string;
   readonly messages: ReadonlyArray<OpenRouterMessage>;
   readonly effort?: ReasoningEffort;
+  readonly tools?: ReadonlyArray<OpenRouterTool>;
 }): Effect.Effect<Stream.Stream<OpenRouterStreamPart, AppError>, AppError> =>
   Effect.succeed(
     Stream.unwrap(
@@ -506,12 +709,19 @@ export const openRouterTokenStream = (options: {
           HttpClientRequest.setHeader("X-Title", "openrouter-mobile"),
           HttpClientRequest.bodyJsonUnsafe(openRouterChatBody(options)),
         );
-        const response = yield* options.http.execute(request).pipe(
-          Effect.flatMap(HttpClientResponse.filterStatusOk),
-          Effect.mapError(() =>
-            openRouterFailed("OpenRouter chat completions request failed"),
-          ),
-        );
+        const response = yield* options.http
+          .execute(request)
+          .pipe(
+            Effect.mapError(() =>
+              openRouterFailed("OpenRouter chat completions request failed"),
+            ),
+          );
+        if (response.status < 200 || response.status >= 300) {
+          return yield* failOpenRouterResponse(
+            response,
+            "OpenRouter chat completions request failed",
+          );
+        }
         return response.stream.pipe(
           Stream.decodeText(),
           Stream.splitLines,
@@ -754,6 +964,10 @@ export const openRouterGenerateVideo = (options: {
   readonly resolution?: string;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
+  readonly inputReferences?: ReadonlyArray<string>;
+  readonly frameImages?: ReadonlyArray<OpenRouterFrameImage>;
   readonly pollInterval?: Duration.Input;
   readonly maxPolls?: number;
 }): Effect.Effect<

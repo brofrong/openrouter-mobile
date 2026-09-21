@@ -42,4 +42,12 @@ export const AppConfig = Config.all({
   ),
   s3Bucket: Config.String("S3_BUCKET").pipe(Config.withDefault("media")),
   s3Region: Config.String("S3_REGION").pipe(Config.withDefault("us-east-1")),
+  sandboxUrl: Config.option(
+    Config.String("SANDBOX_URL").pipe(Config.map(trimTrailingSlash)),
+  ),
+  sandboxSecret: Config.option(Config.Redacted("SANDBOX_SECRET")),
+  mcpUrl: Config.option(
+    Config.String("MCP_URL").pipe(Config.map(trimTrailingSlash)),
+  ),
+  mcpSecret: Config.option(Config.Redacted("MCP_SECRET")),
 });

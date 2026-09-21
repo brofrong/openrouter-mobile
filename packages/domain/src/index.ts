@@ -13,5 +13,7 @@ export * from "./Message";
 export * from "./message-content";
 export * from "./OutputModality";
 export * from "./ReasoningEffort";
+export * from "./StoredChatFile";
 export * from "./StreamEvent";
 export * from "./UsageSummary";
+export * from "./VideoToolOptions";

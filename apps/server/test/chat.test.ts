@@ -6,6 +6,7 @@ import {
   streamEvents,
   usageEvents,
   user,
+  userAiConfigs,
 } from "@openrouter-mobile/db";
 import {
   AppError,
@@ -13,6 +14,7 @@ import {
   type ChatStreamEvent,
   type MessageId,
   StreamEvent,
+  VideoToolOptions,
 } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
 import {
@@ -24,6 +26,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
+import { setAiConfigModel } from "../src/features/ai-config/AiConfigLive";
 import {
   createChat,
   listChats,
@@ -42,17 +45,28 @@ import {
 import { DurableStream } from "../src/features/durable-stream/DurableStream";
 import { DurableStreamLive } from "../src/features/durable-stream/DurableStreamLive";
 import {
+  type MediaGenerateInput,
+  OpenRouterMedia,
+  OpenRouterMediaStubLive,
+} from "../src/features/generation/OpenRouterMedia";
+import {
   AuthMiddleware,
   AuthMiddlewareLive,
   CurrentSession,
 } from "../src/shared/AuthMiddleware";
 import { Auth, createAuth, type Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
+import { McpClient, McpClientStubLive } from "../src/shared/mcp-client";
 import {
   MemoryObjectStoreLive,
   type ObjectStore,
 } from "../src/shared/object-store";
 import { isUsableOpenRouterKeyValue } from "../src/shared/openrouter";
+import {
+  PythonSandbox,
+  PythonSandboxStubLive,
+} from "../src/shared/python-sandbox";
+import { SANDBOX_EXECUTE_TOOL } from "../src/shared/python-tool";
 
 if (process.env.DATABASE_URL === undefined) {
   process.env.DATABASE_URL =
@@ -124,13 +138,19 @@ const OpenRouterMockLive = Layer.succeed(OpenRouterChat, {
 const TestLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterMockLive,
+  OpenRouterMediaStubLive,
   MemoryObjectStoreLive,
+  PythonSandboxStubLive,
+  McpClientStubLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const RealOpenRouterLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterChatLive,
+  OpenRouterMediaStubLive,
   MemoryObjectStoreLive,
+  PythonSandboxStubLive,
+  McpClientStubLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const waitUntilLive = Effect.sleep("150 millis");
@@ -162,7 +182,14 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
+    | AppDb
+    | DurableStream
+    | OpenRouterChat
+    | OpenRouterMedia
+    | ObjectStore
+    | PythonSandbox
+    | McpClient
+    | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(TestLive)));
@@ -171,7 +198,14 @@ const runReal = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
+    | AppDb
+    | DurableStream
+    | OpenRouterChat
+    | OpenRouterMedia
+    | ObjectStore
+    | PythonSandbox
+    | McpClient
+    | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(
@@ -215,6 +249,9 @@ const insertUser = (label: string) =>
           }
           yield* db.delete(chats).where(eq(chats.userId, userId));
           yield* db.delete(usageEvents).where(eq(usageEvents.userId, userId));
+          yield* db
+            .delete(userAiConfigs)
+            .where(eq(userAiConfigs.userId, userId));
           yield* db.delete(user).where(eq(user.id, userId));
         }),
       ),
@@ -258,14 +295,24 @@ const OpenRouterFailLive = Layer.succeed(OpenRouterChat, {
 const FailLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterFailLive,
+  OpenRouterMediaStubLive,
   MemoryObjectStoreLive,
+  PythonSandboxStubLive,
+  McpClientStubLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const runFail = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
+    | AppDb
+    | DurableStream
+    | OpenRouterChat
+    | OpenRouterMedia
+    | ObjectStore
+    | PythonSandbox
+    | McpClient
+    | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(FailLive)));
@@ -553,7 +600,10 @@ test("ChatSend unlocks generating if the user event cannot be appended", async (
         Layer.mergeAll(
           FailAppendLive,
           OpenRouterMockLive,
+          OpenRouterMediaStubLive,
           MemoryObjectStoreLive,
+          PythonSandboxStubLive,
+          McpClientStubLive,
         ).pipe(Layer.provideMerge(DbLive)),
       ),
     ),
@@ -984,6 +1034,310 @@ test("ChatList({ kind }) keeps chat kinds separate", async () => {
   expect(result.videos.map((chat) => chat.id)).toEqual([result.videoChat.id]);
   expect(result.speech.map((chat) => chat.id)).toEqual([result.speechChat.id]);
   expect(result.audio.map((chat) => chat.id)).toEqual([result.audioChat.id]);
+});
+
+test("ChatSend video tool call uses the chat model and settings video defaults", async () => {
+  let seenModel: string | undefined;
+  let seenTools = false;
+  let seenGenerate: MediaGenerateInput | undefined;
+  const ToolLive = Layer.mergeAll(
+    DurableStreamLive,
+    MemoryObjectStoreLive,
+    PythonSandboxStubLive,
+    McpClientStubLive,
+    Layer.succeed(OpenRouterChat, {
+      complete: (messages, options) => {
+        const hasToolResult = messages.some(
+          (message) => message.role === "tool",
+        );
+        if (!hasToolResult) {
+          seenModel = options?.model;
+          seenTools = (options?.tools?.length ?? 0) > 0;
+          return Effect.succeed(
+            Stream.fromIterable([
+              {
+                _tag: "tool_call_delta" as const,
+                index: 0,
+                id: "call_video",
+                name: "generate_video",
+                arguments: '{"prompt":"a cat on the moon"}',
+              },
+            ]),
+          );
+        }
+        return Effect.succeed(
+          Stream.fromIterable([
+            { _tag: "text" as const, text: "Generating that video." },
+          ]),
+        );
+      },
+      listModels: () => Effect.succeed(emptyCatalogPage),
+    }),
+    Layer.succeed(OpenRouterMedia, {
+      generate: (input) => {
+        seenGenerate = input;
+        return Effect.succeed({
+          url: `data:video/mp4;base64,${Buffer.from(`video:${input.jobId}`).toString("base64")}`,
+        });
+      },
+    }),
+  ).pipe(Layer.provideMerge(DbLive));
+
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const session = yield* insertUser("video-tool");
+      yield* asUser(session, setAiConfigModel("video", "google/veo-3.1"));
+      const chat = yield* asUser(session, createChat());
+      const events = yield* asUser(
+        session,
+        untilTerminal(chat.id).pipe(Effect.forkChild),
+      );
+      yield* waitUntilLive;
+      yield* asUser(
+        session,
+        sendMessage({
+          chatId: chat.id,
+          content: "make a video of a cat",
+          model: "openai/gpt-4o-mini",
+          video: new VideoToolOptions({
+            duration: 8,
+            resolution: "720p",
+            aspectRatio: "16:9",
+            generateAudio: true,
+          }),
+        }),
+      );
+      const collected = yield* Fiber.join(events);
+      const db = yield* AppDb;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const jobs = yield* db.query.generationJobs.findMany({
+          where: { chatId: chat.id },
+        });
+        if (
+          jobs.some(
+            (job) => job.status === "completed" || job.status === "failed",
+          )
+        ) {
+          break;
+        }
+        yield* Effect.sleep("20 millis");
+      }
+      yield* waitUntilIdle(chat.id);
+      const page = yield* asUser(session, listMessages({ chatId: chat.id }));
+      const jobs = yield* db.query.generationJobs.findMany({
+        where: { chatId: chat.id },
+      });
+      return { collected, jobs, page };
+    }).pipe(Effect.scoped, Effect.provide(ToolLive)),
+  );
+
+  expect(seenModel).toBe("openai/gpt-4o-mini");
+  expect(seenTools).toBe(true);
+  expect(seenGenerate?.kind).toBe("video");
+  expect(seenGenerate?.prompt).toBe("a cat on the moon");
+  expect(seenGenerate?.model).toBe("google/veo-3.1");
+  expect(seenGenerate?.duration).toBe(8);
+  expect(seenGenerate?.resolution).toBe("720p");
+  expect(seenGenerate?.aspectRatio).toBe("16:9");
+  expect(seenGenerate?.generateAudio).toBe(true);
+  expect(result.jobs).toHaveLength(1);
+  expect(result.jobs[0]?.kind).toBe("video");
+  expect(result.collected.some((event) => event._tag === "job")).toBe(true);
+  expect(
+    result.page.messages.some(
+      (message) => message.content === "Generating that video.",
+    ),
+  ).toBe(true);
+});
+
+test("ChatSend sandbox execute harvests generated files onto the assistant message", async () => {
+  const PythonLive = Layer.succeed(PythonSandbox, {
+    chatTools: [SANDBOX_EXECUTE_TOOL],
+    execute: () =>
+      Effect.succeed({
+        exitCode: 0,
+        stdout: "wrote report",
+        stderr: "",
+        timedOut: false,
+        files: [{ path: "report.txt", size: 5, mime: "text/plain" }],
+      }),
+    putFile: () => Effect.void,
+    getFile: () =>
+      Effect.succeed({
+        body: new Uint8Array([104, 101, 108, 108, 111]),
+        mime: "text/plain",
+      }),
+    listFiles: () =>
+      Effect.succeed([{ path: "old.csv", size: 3, mime: "text/csv" }]),
+    deleteSession: () => Effect.void,
+  });
+  const ToolLive = Layer.mergeAll(
+    DurableStreamLive,
+    MemoryObjectStoreLive,
+    PythonLive,
+    Layer.succeed(OpenRouterChat, {
+      complete: (messages) => {
+        const hasToolResult = messages.some(
+          (message) => message.role === "tool",
+        );
+        if (!hasToolResult) {
+          expect(
+            messages.some(
+              (message) =>
+                typeof message.content === "string" &&
+                message.content.includes("old.csv"),
+            ),
+          ).toBe(true);
+          return Effect.succeed(
+            Stream.fromIterable([
+              {
+                _tag: "tool_call_delta" as const,
+                index: 0,
+                id: "call_py",
+                name: "execute",
+                arguments:
+                  '{"code":"open(\\"report.txt\\",\\"w\\").write(\\"hello\\")"}',
+              },
+            ]),
+          );
+        }
+        return Effect.succeed(
+          Stream.fromIterable([
+            { _tag: "text" as const, text: "Created report.txt" },
+          ]),
+        );
+      },
+      listModels: () => Effect.succeed(emptyCatalogPage),
+    }),
+    OpenRouterMediaStubLive,
+    McpClientStubLive,
+  ).pipe(Layer.provideMerge(DbLive));
+
+  const page = await Effect.runPromise(
+    Effect.gen(function* () {
+      const session = yield* insertUser("python-tool");
+      const chat = yield* asUser(session, createChat());
+      const events = yield* asUser(
+        session,
+        untilTerminal(chat.id).pipe(Effect.forkChild),
+      );
+      yield* waitUntilLive;
+      yield* asUser(
+        session,
+        sendMessage({
+          chatId: chat.id,
+          content: "make a txt file",
+        }),
+      );
+      yield* Fiber.join(events);
+      yield* waitUntilIdle(chat.id);
+      return yield* asUser(session, listMessages({ chatId: chat.id }));
+    }).pipe(Effect.scoped, Effect.provide(ToolLive)),
+  );
+
+  const assistant = page.messages.find(
+    (message) => message.role === "assistant",
+  );
+  expect(assistant?.content.includes("Created report.txt")).toBe(true);
+  expect(assistant?.content.includes("report.txt")).toBe(true);
+  expect(assistant?.content.includes("/media/")).toBe(true);
+});
+
+test("ChatSend MCP tool call feeds the result back to the model", async () => {
+  let seenToolNames: ReadonlyArray<string> = [];
+  let called:
+    | {
+        readonly name: string;
+        readonly args: { readonly [key: string]: unknown };
+      }
+    | undefined;
+  const McpLive = Layer.succeed(McpClient, {
+    listTools: () =>
+      Effect.succeed([
+        {
+          type: "function" as const,
+          function: {
+            name: "search",
+            description: "Search the web using DuckDuckGo.",
+            parameters: {
+              type: "object",
+              required: ["query"],
+              properties: { query: { type: "string" } },
+            },
+          },
+        },
+      ]),
+    callTool: (name, args) => {
+      called = { name, args };
+      return Effect.succeed("1. Effect MCP\nhttps://effect.website");
+    },
+  });
+  const ToolLive = Layer.mergeAll(
+    DurableStreamLive,
+    MemoryObjectStoreLive,
+    PythonSandboxStubLive,
+    McpLive,
+    Layer.succeed(OpenRouterChat, {
+      complete: (messages, options) => {
+        const hasToolResult = messages.some(
+          (message) => message.role === "tool",
+        );
+        if (!hasToolResult) {
+          seenToolNames =
+            options?.tools?.map((tool) => tool.function.name) ?? [];
+          return Effect.succeed(
+            Stream.fromIterable([
+              {
+                _tag: "tool_call_delta" as const,
+                index: 0,
+                id: "call_search",
+                name: "search",
+                arguments: '{"query":"effect mcp"}',
+              },
+            ]),
+          );
+        }
+        return Effect.succeed(
+          Stream.fromIterable([
+            { _tag: "text" as const, text: "Effect has MCP docs." },
+          ]),
+        );
+      },
+      listModels: () => Effect.succeed(emptyCatalogPage),
+    }),
+    OpenRouterMediaStubLive,
+  ).pipe(Layer.provideMerge(DbLive));
+
+  const page = await Effect.runPromise(
+    Effect.gen(function* () {
+      const session = yield* insertUser("mcp-tool");
+      const chat = yield* asUser(session, createChat());
+      const events = yield* asUser(
+        session,
+        untilTerminal(chat.id).pipe(Effect.forkChild),
+      );
+      yield* waitUntilLive;
+      yield* asUser(
+        session,
+        sendMessage({
+          chatId: chat.id,
+          content: "search for effect mcp",
+        }),
+      );
+      yield* Fiber.join(events);
+      yield* waitUntilIdle(chat.id);
+      return yield* asUser(session, listMessages({ chatId: chat.id }));
+    }).pipe(Effect.scoped, Effect.provide(ToolLive)),
+  );
+
+  expect(seenToolNames).toContain("search");
+  expect(seenToolNames).toContain("generate_video");
+  expect(seenToolNames).not.toContain("run_python");
+  expect(seenToolNames).not.toContain("execute");
+  expect(called).toEqual({ name: "search", args: { query: "effect mcp" } });
+  expect(
+    page.messages.some((message) => message.content === "Effect has MCP docs."),
+  ).toBe(true);
 });
 
 (hasRealOpenRouterKey ? test : test.skip)(

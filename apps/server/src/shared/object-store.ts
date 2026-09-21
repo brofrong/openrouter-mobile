@@ -1,6 +1,8 @@
 import { S3Client } from "bun";
 import { Context, Data, Effect, Layer, Redacted } from "effect";
 import { AppConfig } from "./config";
+import { storedContentType } from "./media-url";
+import { ensureS3Bucket } from "./s3-bucket";
 
 export type StoredObject = {
   readonly body: Uint8Array;
@@ -60,13 +62,18 @@ const ioError = (error: unknown) =>
 
 export const makeS3ObjectStore = Effect.gen(function* () {
   const config = yield* AppConfig;
-  const client = new S3Client({
+  const credentials = {
     accessKeyId: config.s3AccessKeyId,
     secretAccessKey: Redacted.value(config.s3SecretAccessKey),
     bucket: config.s3Bucket,
     endpoint: config.s3Endpoint,
     region: config.s3Region,
+  };
+  yield* Effect.tryPromise({
+    try: () => ensureS3Bucket(credentials),
+    catch: ioError,
   });
+  const client = new S3Client(credentials);
   return {
     put: (key, body, contentType) =>
       Effect.tryPromise({
@@ -85,13 +92,12 @@ export const makeS3ObjectStore = Effect.gen(function* () {
             });
           }
           const buffer = await file.arrayBuffer();
-          const contentType =
-            typeof file.type === "string" && file.type.length > 0
-              ? file.type
-              : "application/octet-stream";
           return {
             body: new Uint8Array(buffer),
-            contentType,
+            contentType: storedContentType(
+              key,
+              typeof file.type === "string" ? file.type : "",
+            ),
           } satisfies StoredObject;
         },
         catch: (error) =>

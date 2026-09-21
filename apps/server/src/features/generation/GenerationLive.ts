@@ -216,7 +216,13 @@ const runGeneration = (options: {
   readonly n?: number;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
   readonly inputReferences?: ReadonlyArray<string>;
+  readonly frameImages?: ReadonlyArray<{
+    readonly url: string;
+    readonly frameType: "first_frame" | "last_frame";
+  }>;
   readonly voice?: string;
   readonly db: Effect.Success<typeof AppDb>;
   readonly durable: DurableStreamService;
@@ -252,6 +258,21 @@ const runGeneration = (options: {
         : yield* resolveMediaUrls(options.inputReferences).pipe(
             Effect.mapError(toAppError),
           );
+    const requestedFrames = options.frameImages;
+    const frameImages =
+      requestedFrames === undefined
+        ? undefined
+        : yield* resolveMediaUrls(
+            requestedFrames.map((image) => image.url),
+          ).pipe(
+            Effect.mapError(toAppError),
+            Effect.map((urls) =>
+              requestedFrames.map((image, index) => ({
+                url: urls[index] ?? image.url,
+                frameType: image.frameType,
+              })),
+            ),
+          );
 
     const generated = yield* options.media
       .generate({
@@ -276,7 +297,10 @@ const runGeneration = (options: {
         ...(options.generateAudio === undefined
           ? {}
           : { generateAudio: options.generateAudio }),
+        ...(options.size === undefined ? {} : { size: options.size }),
+        ...(options.seed === undefined ? {} : { seed: options.seed }),
         ...(inputReferences === undefined ? {} : { inputReferences }),
+        ...(frameImages === undefined ? {} : { frameImages }),
         ...(options.voice === undefined ? {} : { voice: options.voice }),
       })
       .pipe(
@@ -346,7 +370,7 @@ const runGeneration = (options: {
   );
 };
 
-const startJob = (options: {
+export const startJob = (options: {
   readonly kind: MediaKind;
   readonly prompt: string;
   readonly chatId?: string;
@@ -358,7 +382,13 @@ const startJob = (options: {
   readonly n?: number;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
   readonly inputReferences?: ReadonlyArray<string>;
+  readonly frameImages?: ReadonlyArray<{
+    readonly url: string;
+    readonly frameType: "first_frame" | "last_frame";
+  }>;
   readonly voice?: string;
 }) =>
   Effect.gen(function* () {
@@ -418,9 +448,14 @@ const startJob = (options: {
         ...(options.generateAudio === undefined
           ? {}
           : { generateAudio: options.generateAudio }),
+        ...(options.size === undefined ? {} : { size: options.size }),
+        ...(options.seed === undefined ? {} : { seed: options.seed }),
         ...(options.inputReferences === undefined
           ? {}
           : { inputReferences: options.inputReferences }),
+        ...(options.frameImages === undefined
+          ? {}
+          : { frameImages: options.frameImages }),
         ...(options.voice === undefined ? {} : { voice: options.voice }),
       }),
     );
@@ -466,6 +501,8 @@ const generateInChat = (options: {
   readonly n?: number;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
   readonly inputReferences?: ReadonlyArray<string>;
   readonly voice?: string;
 }) =>
@@ -543,6 +580,8 @@ const generateInChat = (options: {
       ...(options.generateAudio === undefined
         ? {}
         : { generateAudio: options.generateAudio }),
+      ...(options.size === undefined ? {} : { size: options.size }),
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
       ...(inputReferences.length === 0 ? {} : { inputReferences }),
       ...(options.voice === undefined ? {} : { voice: options.voice }),
     });
@@ -588,6 +627,9 @@ export const generateVideo = (payload: {
   readonly resolution?: string;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
+  readonly inputReferences?: ReadonlyArray<string>;
 }) =>
   generateInChat({
     kind: "video",
@@ -604,6 +646,11 @@ export const generateVideo = (payload: {
     ...(payload.generateAudio === undefined
       ? {}
       : { generateAudio: payload.generateAudio }),
+    ...(payload.size === undefined ? {} : { size: payload.size }),
+    ...(payload.seed === undefined ? {} : { seed: payload.seed }),
+    ...(payload.inputReferences === undefined
+      ? {}
+      : { inputReferences: payload.inputReferences }),
   });
 
 export const synthesizeSpeech = (payload: {

@@ -46,6 +46,20 @@ test("persistGeneratedUrl keeps already stored media URLs", async () => {
   expect(again).toBe(first);
 });
 
+test("resolveMediaUrl uses the object key when storage reports octet-stream", async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const resolved = await runStore(
+    Effect.gen(function* () {
+      const store = yield* ObjectStore;
+      yield* store.put("user-1/shot.png", png, "application/octet-stream");
+      return yield* resolveMediaUrl(
+        "http://localhost:3000/media/user-1/shot.png",
+      );
+    }),
+  );
+  expect(resolved.startsWith("data:image/png;base64,")).toBe(true);
+});
+
 test("persistGeneratedUrl stores every newline-separated payload", async () => {
   const stored = await runStore(
     persistGeneratedUrl(

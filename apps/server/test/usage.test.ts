@@ -13,14 +13,23 @@ import { createChat, sendMessage } from "../src/features/chat/ChatLive";
 import { OpenRouterChat } from "../src/features/chat/OpenRouterChat";
 import type { DurableStream } from "../src/features/durable-stream/DurableStream";
 import { DurableStreamLive } from "../src/features/durable-stream/DurableStreamLive";
+import {
+  type OpenRouterMedia,
+  OpenRouterMediaStubLive,
+} from "../src/features/generation/OpenRouterMedia";
 import { summarizeUsage } from "../src/features/usage/UsageLive";
 import { CurrentSession } from "../src/shared/AuthMiddleware";
 import type { Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
+import { type McpClient, McpClientStubLive } from "../src/shared/mcp-client";
 import {
   MemoryObjectStoreLive,
   type ObjectStore,
 } from "../src/shared/object-store";
+import {
+  type PythonSandbox,
+  PythonSandboxStubLive,
+} from "../src/shared/python-sandbox";
 
 if (process.env.DATABASE_URL === undefined) {
   process.env.DATABASE_URL =
@@ -52,7 +61,10 @@ const OpenRouterUsageMockLive = Layer.succeed(OpenRouterChat, {
 const TestLive = Layer.mergeAll(
   DurableStreamLive,
   OpenRouterUsageMockLive,
+  OpenRouterMediaStubLive,
   MemoryObjectStoreLive,
+  PythonSandboxStubLive,
+  McpClientStubLive,
 ).pipe(Layer.provideMerge(DbLive));
 
 const makeSession = (userId: string, email: string): Session =>
@@ -82,7 +94,14 @@ const run = <A, E>(
   effect: Effect.Effect<
     A,
     E,
-    AppDb | DurableStream | OpenRouterChat | ObjectStore | Scope.Scope
+    | AppDb
+    | DurableStream
+    | OpenRouterChat
+    | OpenRouterMedia
+    | ObjectStore
+    | PythonSandbox
+    | McpClient
+    | Scope.Scope
   >,
 ): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(TestLive)));

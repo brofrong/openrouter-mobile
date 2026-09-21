@@ -11,9 +11,11 @@ import {
   isObjectKey,
   MAX_UPLOAD_BYTES,
   makeObjectKey,
+  mimeFromFilename,
   objectKeyFromPathname,
   parseByteRange,
   publicMediaUrl,
+  sanitizeDownloadFilename,
 } from "./media-url";
 import { ObjectStore, type ObjectStoreService } from "./object-store";
 
@@ -27,6 +29,7 @@ const json = (body: unknown, status: number) =>
 const mediaHeaders = (options: {
   readonly contentLength: number;
   readonly contentRange?: string;
+  readonly filename?: string;
 }): Record<string, string> => ({
   "accept-ranges": "bytes",
   "cache-control": "private, max-age=31536000, immutable",
@@ -34,6 +37,11 @@ const mediaHeaders = (options: {
   ...(options.contentRange === undefined
     ? {}
     : { "content-range": options.contentRange }),
+  ...(options.filename === undefined
+    ? {}
+    : {
+        "content-disposition": `attachment; filename="${options.filename.replaceAll('"', "")}"`,
+      }),
 });
 
 const getObject = (
@@ -45,6 +53,10 @@ const getObject = (
     if (key === undefined || !isObjectKey(key)) {
       return HttpServerResponse.empty({ status: 404 });
     }
+    const filename = sanitizeDownloadFilename(
+      new URL(request.url, "http://media.local").searchParams.get("filename") ??
+        "",
+    );
     const result = yield* store.get(key).pipe(Effect.result);
     if (Result.isFailure(result)) {
       return HttpServerResponse.empty({
@@ -74,6 +86,7 @@ const getObject = (
         : {
             contentRange: `bytes ${range.start}-${range.end}/${stored.body.byteLength}`,
           }),
+      ...(filename === undefined ? {} : { filename }),
     });
     return HttpServerResponse.uint8Array(slice, {
       status,
@@ -113,8 +126,12 @@ const uploadObject = (
     if (file.size > MAX_UPLOAD_BYTES) {
       return yield* json({ error: "too large" }, 413);
     }
+    const hinted =
+      file.type.length > 0 ? file.type : mimeFromFilename(file.name);
     const contentType =
-      file.type.length > 0 ? file.type : "application/octet-stream";
+      hinted !== undefined && hinted.length > 0
+        ? hinted
+        : "application/octet-stream";
     if (!isAllowedMediaMime(contentType)) {
       return yield* json({ error: "unsupported type" }, 415);
     }

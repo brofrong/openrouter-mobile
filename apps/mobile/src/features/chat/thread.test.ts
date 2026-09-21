@@ -8,9 +8,12 @@ import {
   ChatTitleEvent,
   ChatTokenEvent,
   ChatUserEvent,
+  decodeStoredContent,
+  encodeStoredContent,
   type GenerationJobId,
   Message,
   type MessageId,
+  StoredChatFile,
 } from "@openrouter-mobile/domain";
 import { DateTime } from "effect";
 import {
@@ -21,6 +24,7 @@ import {
   isServerMessageId,
   mergeOlderMessages,
   oldestServerMessageId,
+  toThreadItem,
 } from "./thread";
 
 const chatId = "chat-1" as ChatId;
@@ -133,7 +137,48 @@ test("hydrateFromPage maps messages and seeds draft from inProgress", () => {
   expect(idle.generating).toBe(false);
 });
 
-test("applyChatStreamEvent records error and ignores title and job", () => {
+test("hydrateFromPage keeps encoded file chips in message content", () => {
+  const content = encodeStoredContent(
+    "report ready",
+    [],
+    [
+      new StoredChatFile({
+        url: "http://localhost/media/u/a.xlsx",
+        name: "a.xlsx",
+        mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size: 12,
+      }),
+    ],
+  );
+  const state = hydrateFromPage(
+    new ChatMessagePage({
+      messages: [
+        new Message({
+          id: "asst-file-1" as MessageId,
+          chatId,
+          role: "assistant",
+          content,
+          createdAt,
+        }),
+      ],
+      hasMore: false,
+      headSeq: 1,
+      generating: false,
+      jobs: [],
+    }),
+  );
+  expect(state.messages[0]?.content).toBe(content);
+  expect(decodeStoredContent(state.messages[0]?.content ?? "").files).toEqual([
+    {
+      url: "http://localhost/media/u/a.xlsx",
+      name: "a.xlsx",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 12,
+    },
+  ]);
+});
+
+test("applyChatStreamEvent records error and ignores title", () => {
   let state = applyChatStreamEvent(emptyThread(), userEvent);
   state = applyChatStreamEvent(
     state,
@@ -151,16 +196,60 @@ test("applyChatStreamEvent records error and ignores title and job", () => {
     state,
     new ChatTitleEvent({ _tag: "title", seq: 3, title: "Hello" }),
   );
-  const afterJob = applyChatStreamEvent(
-    afterTitle,
+  expect(afterTitle).toEqual(state);
+});
+
+test("applyChatStreamEvent appends video job events", () => {
+  let state = applyChatStreamEvent(emptyThread(), userEvent);
+  state = applyChatStreamEvent(
+    state,
     new ChatJobEvent({
       _tag: "job",
-      seq: 4,
+      seq: 2,
       jobId: "job-1" as GenerationJobId,
       status: "queued",
     }),
   );
-  expect(afterJob).toEqual(state);
+  expect(state.messages.at(-1)).toMatchObject({
+    jobId: "job-1",
+    status: "queued",
+    role: "assistant",
+  });
+  state = applyChatStreamEvent(
+    state,
+    new ChatJobEvent({
+      _tag: "job",
+      seq: 3,
+      jobId: "job-1" as GenerationJobId,
+      status: "completed",
+      url: "https://example.com/clip.mp4",
+    }),
+  );
+  expect(state.messages.at(-1)).toMatchObject({
+    jobId: "job-1",
+    status: "completed",
+    url: "https://example.com/clip.mp4",
+  });
+});
+
+test("applyChatStreamEvent ignores empty done messages", () => {
+  let state = applyChatStreamEvent(emptyThread(), userEvent);
+  state = applyChatStreamEvent(
+    state,
+    new ChatDoneEvent({
+      _tag: "done",
+      seq: 2,
+      message: new Message({
+        id: "empty-1" as MessageId,
+        chatId,
+        role: "assistant",
+        content: "",
+        createdAt,
+      }),
+    }),
+  );
+  expect(state.generating).toBe(false);
+  expect(state.messages).toEqual([toThreadItem(userMessage)]);
 });
 
 test("applyChatStreamEvent clears draft on error and error on the next user turn", () => {

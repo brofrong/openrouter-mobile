@@ -8,6 +8,7 @@ import {
   DEFAULT_OPENROUTER_SPEECH_MODEL,
   DEFAULT_OPENROUTER_VIDEO_MODEL,
   isUsableOpenRouterKey,
+  type OpenRouterFrameImage,
   type OpenRouterUsage,
   openRouterGenerateAudio,
   openRouterGenerateImage,
@@ -29,7 +30,10 @@ export type MediaGenerateInput = {
   readonly n?: number;
   readonly duration?: number;
   readonly generateAudio?: boolean;
+  readonly size?: string;
+  readonly seed?: number;
   readonly inputReferences?: ReadonlyArray<string>;
+  readonly frameImages?: ReadonlyArray<OpenRouterFrameImage>;
   readonly voice?: string;
 };
 
@@ -121,6 +125,14 @@ export const makeOpenRouterMedia = Effect.gen(function* () {
           ...(input.generateAudio === undefined
             ? {}
             : { generateAudio: input.generateAudio }),
+          ...(input.size === undefined ? {} : { size: input.size }),
+          ...(input.seed === undefined ? {} : { seed: input.seed }),
+          ...(input.inputReferences === undefined
+            ? {}
+            : { inputReferences: input.inputReferences }),
+          ...(input.frameImages === undefined
+            ? {}
+            : { frameImages: input.frameImages }),
         });
       }
       return openRouterGenerateImage({
