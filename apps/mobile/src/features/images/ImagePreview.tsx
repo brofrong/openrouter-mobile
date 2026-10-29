@@ -6,6 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import {
   Gesture,
@@ -40,18 +41,20 @@ type WheelViewProps = {
 
 const WheelView = View as unknown as ComponentType<WheelViewProps>;
 
-const overlayStyle = {
+// react-native-web understands position: "fixed"; the native ViewStyle type
+// does not, so the web-only part is cast.
+const overlayStyle: ViewStyle = {
   backgroundColor: "#000",
   flex: 1,
   ...(Platform.OS === "web"
-    ? {
+    ? ({
         bottom: 0,
         left: 0,
         position: "fixed" as const,
         right: 0,
         top: 0,
         zIndex: 10000,
-      }
+      } as unknown as ViewStyle)
     : {}),
 };
 
