@@ -25,9 +25,9 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - run: bun lint
-      - run: bun fmt --check
-      - run: bun check
+      - run: ${{ env.HOME }}/.bun/bin/bun lint
+      - run: ${{ env.HOME }}/.bun/bin/bun fmt --check
+      - run: ${{ env.HOME }}/.bun/bin/bun check
 
   server-image:
     needs: check
