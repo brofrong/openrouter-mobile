@@ -22,6 +22,7 @@ jobs:
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
-      - run: bun lint --no-script
-      - run: bun fmt --check --no-script
-      - run: bun check --no-script
+      - run: which bun && bun --version
+      - run: bun lint
+      - run: bun fmt --check
+      - run: bun check
