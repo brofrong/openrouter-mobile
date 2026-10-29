@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM oven/bun:1.4.2 AS web
+FROM oven/bun:1.4.4 AS web
 
 WORKDIR /app
 
@@ -47,7 +47,7 @@ RUN set -eu; \
   echo "expo export timed out before writing dist"; \
   exit 1
 
-FROM oven/bun:1.4.2-alpine
+FROM oven/bun:1.4.4-alpine
 
 WORKDIR /app
 
