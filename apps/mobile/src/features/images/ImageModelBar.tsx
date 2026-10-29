@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { XStack } from "tamagui";
+
 import { imageModelHasOptions } from "../../entities/model/image-catalog";
 import { loadCatalogPage } from "../../entities/model/load-catalog-page";
 import { LabeledChip, ModelChip } from "../../entities/model/ModelChip";

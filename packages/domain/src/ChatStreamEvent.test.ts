@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { Schema } from "effect";
+
 import { ChatStreamEvent } from "./ChatStreamEvent";
 
 test("ChatStreamEvent decodes tagged token payloads", () => {

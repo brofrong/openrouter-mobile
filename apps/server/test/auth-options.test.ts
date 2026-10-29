@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
+
 import { AuthSettings, OIDC_PROVIDER_ID } from "@openrouter-mobile/domain";
 import { ConfigProvider, Effect } from "effect";
+
 import {
   oidcEndpointsFromIssuer,
   oidcIncompleteMessage,

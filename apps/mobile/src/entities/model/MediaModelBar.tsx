@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { XStack } from "tamagui";
+
 import { loadCatalogPage } from "./load-catalog-page";
-import { LabeledChip, ModelChip } from "./ModelChip";
-import { ModelPicker } from "./ModelPicker";
 import {
   type MediaModelKind,
   mediaModelsFor,
@@ -11,6 +10,8 @@ import {
   videoModelFromPicker,
   videoModelHasOptions,
 } from "./media-catalog";
+import { LabeledChip, ModelChip } from "./ModelChip";
+import { ModelPicker } from "./ModelPicker";
 import { SpeechOptionsSheet } from "./SpeechOptionsSheet";
 import type { SelectedMediaModelState } from "./use-selected-media-model";
 import { VideoOptionsSheet } from "./VideoOptionsSheet";

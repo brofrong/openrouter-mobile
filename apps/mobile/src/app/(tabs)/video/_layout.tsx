@@ -1,5 +1,6 @@
 import { Slot } from "expo-router";
 import { YStack } from "tamagui";
+
 import { VideoScreen } from "../../../features/video/VideoScreen";
 
 export default function VideoLayout() {

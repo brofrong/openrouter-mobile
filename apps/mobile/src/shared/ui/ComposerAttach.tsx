@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { StoredChatFile } from "@openrouter-mobile/domain";
 import { Image, Pressable } from "react-native";
 import { Text, useTheme, XStack, YStack } from "tamagui";
+
 import { formatFileSize } from "../format-file-size";
 import { pickAndUploadChatFile } from "./pick-file";
 import { pickAndUploadImage } from "./pick-image";

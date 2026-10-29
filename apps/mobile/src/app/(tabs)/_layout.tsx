@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router/js-tabs";
 import type { ComponentProps } from "react";
 import type { ColorValue } from "react-native";
+
 import { UserAvatarButton } from "../../features/profile/UserAvatarButton";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];

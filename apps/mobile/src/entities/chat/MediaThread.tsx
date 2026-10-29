@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { Platform } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
+
 import { AudioPlayer } from "../../shared/ui/AudioPlayer";
 import { SelectableText } from "../../shared/ui/SelectableText";
 import { UserBubble } from "../../shared/ui/UserBubble";

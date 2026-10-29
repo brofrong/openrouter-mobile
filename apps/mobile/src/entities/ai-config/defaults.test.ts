@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { AiConfig } from "@openrouter-mobile/domain";
+
 import { DEFAULT_CHAT_MODEL_ID } from "../model/catalog";
 import { DEFAULT_IMAGE_MODEL_ID } from "../model/image-catalog";
 import {

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
+
 import { AppError } from "@openrouter-mobile/domain";
 import { Effect, Schedule, Stream } from "effect";
+
 import { getAfterSeq, resetAfterSeq, withAfterSeq } from "./afterSeq";
 import { resumeRpcStream } from "./resume-rpc-stream";
 

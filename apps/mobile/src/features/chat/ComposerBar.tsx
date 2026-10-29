@@ -1,6 +1,7 @@
 import type { StoredChatFile } from "@openrouter-mobile/domain";
 import { useState } from "react";
 import { XStack, YStack } from "tamagui";
+
 import { modelHasEffort } from "../../entities/model/catalog";
 import { EffortChip, ModelChip } from "../../entities/model/ModelChip";
 import { ComposerAttach } from "../../shared/ui/ComposerAttach";

@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Text, XStack, YStack } from "tamagui";
+
 import {
   nextThinkingIndex,
   THINKING_PHRASES,

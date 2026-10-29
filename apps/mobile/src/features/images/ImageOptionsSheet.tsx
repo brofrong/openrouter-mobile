@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Paragraph, Text, useTheme, XStack, YStack } from "tamagui";
+
 import type {
   ImageAspectRatio,
   ImageBackground,

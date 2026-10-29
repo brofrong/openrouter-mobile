@@ -3,6 +3,7 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { Context, Data, Effect, Layer, Option, Redacted } from "effect";
+
 import { AppConfig } from "./config";
 import type { OpenRouterTool } from "./openrouter";
 

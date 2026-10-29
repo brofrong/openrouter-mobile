@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
+
 import { AppError } from "@openrouter-mobile/domain";
 import { Effect, Option, Redacted, Result, Stream } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+
 import {
   OpenRouterChat,
   OpenRouterChatLive,
@@ -619,7 +621,12 @@ test("openRouterGenerateVideo submits, polls, and downloads the clip", async () 
   const bytes = new Uint8Array([0x00, 0x00, 0x00, 0x18]);
   const calls: Array<string> = [];
   const mockFetch = (async (input: Parameters<typeof fetch>[0]) => {
-    const url = String(input);
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+          ? input.url
+          : input.toString();
     calls.push(url);
     if (url === "https://openrouter.ai/api/v1/videos") {
       return new Response(
@@ -714,7 +721,12 @@ test("openRouterGenerateVideo submits, polls, and downloads the clip", async () 
 
 test("openRouterGenerateVideo fails when the job reports failed", async () => {
   const mockFetch = (async (input: Parameters<typeof fetch>[0]) => {
-    const url = String(input);
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+          ? input.url
+          : input.toString();
     if (url === "https://openrouter.ai/api/v1/videos") {
       return new Response(
         JSON.stringify({

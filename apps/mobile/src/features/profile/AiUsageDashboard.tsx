@@ -1,6 +1,7 @@
 import type { UsageRange, UsageSummary } from "@openrouter-mobile/domain";
 import { useWindowDimensions } from "react-native";
 import { Button, Text, XStack, YStack } from "tamagui";
+
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { ActivityStats } from "./ActivityStats";
 import { DailyByModelChart } from "./DailyByModelChart";

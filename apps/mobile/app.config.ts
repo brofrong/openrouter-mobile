@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const DEFAULT_BASE_URL = "http://localhost:3000";

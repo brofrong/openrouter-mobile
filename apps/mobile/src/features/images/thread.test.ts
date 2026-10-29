@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   type ChatId,
   ChatJobEvent,
@@ -10,6 +11,7 @@ import {
   type UserId,
 } from "@openrouter-mobile/domain";
 import { DateTime } from "effect";
+
 import {
   appendTurn,
   applyChatJobEvent,

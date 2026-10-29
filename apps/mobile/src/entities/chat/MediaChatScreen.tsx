@@ -18,6 +18,7 @@ import {
 } from "react";
 import { Pressable } from "react-native";
 import { Paragraph, ScrollView, Spinner, Text } from "tamagui";
+
 import { setAfterSeq, withAfterSeq } from "../../shared/afterSeq";
 import { formatRpcError } from "../../shared/errors";
 import { randomLocalId } from "../../shared/random-id";
@@ -31,8 +32,6 @@ import { useCategoryDefaultModel } from "../ai-config/use-ai-config";
 import { useSelectedMediaModel } from "../model/use-selected-media-model";
 import { ChatMenu, ChatMenuButton } from "./ChatMenu";
 import { ChatRenameDialog } from "./ChatRenameDialog";
-import { MediaComposer } from "./MediaComposer";
-import { type MediaResultKind, MediaThread } from "./MediaThread";
 import {
   appendTurn,
   applyChatJobEvent,
@@ -46,6 +45,8 @@ import {
   oldestServerMessageId,
   toMediaThreadItem,
 } from "./media-thread";
+import { MediaComposer } from "./MediaComposer";
+import { type MediaResultKind, MediaThread } from "./MediaThread";
 
 export type MediaChatKind = Extract<ChatKind, "video" | "speech" | "audio">;
 
@@ -144,7 +145,10 @@ export function MediaChatScreen({
   const loadedIdRef = useRef<ChatId | undefined>(undefined);
   const restoredIdRef = useRef<ChatId | undefined>(undefined);
   const selectedIdRef = useRef(selectedId);
-  selectedIdRef.current = selectedId;
+  // Keep ref in sync with prop to avoid stale closures in callbacks
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
   const navigation = useNavigation();
   const selectedChat = chats.find((chat) => chat.id === selectedId);
   const selectedTitle = selectedChat?.title;
@@ -572,6 +576,8 @@ export function MediaChatScreen({
     );
   };
 
+  // Keep ref callback in sync with current state to avoid stale closures
+  // eslint-disable-next-line react-hooks/refs
   underfillRef.current = () => {
     if (hasMore && items.length > 0) {
       loadOlder();

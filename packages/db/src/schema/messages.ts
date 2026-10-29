@@ -1,4 +1,5 @@
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
 import { chats } from "./chats";
 
 export const messages = pgTable(

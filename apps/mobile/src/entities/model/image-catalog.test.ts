@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   DEFAULT_IMAGE_MODEL_ID,
   imageModelFromPicker,

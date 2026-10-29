@@ -1,7 +1,8 @@
 import { XStack, YStack } from "tamagui";
+
 import { ComposerField } from "../../shared/ui/ComposerField";
-import { MediaModelBar } from "../model/MediaModelBar";
 import type { MediaModelKind } from "../model/media-catalog";
+import { MediaModelBar } from "../model/MediaModelBar";
 import type { SelectedMediaModelState } from "../model/use-selected-media-model";
 
 type MediaComposerProps = {

@@ -9,10 +9,11 @@ import {
 } from "expo-router";
 import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode } from "react";
 import { Platform, useColorScheme } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Paragraph, TamaguiProvider, YStack } from "tamagui";
+
 import { tamaguiConfig } from "../../tamagui.config";
 import { APP_SANS, APP_SANS_NATIVE, useAppFonts } from "../shared/app-fonts";
 import { authClient } from "../shared/auth-client";
@@ -42,10 +43,6 @@ export default function RootLayout() {
   const themeName = colorScheme === "dark" ? "dark" : "light";
   const pathname = usePathname();
   const { data: session, isPending } = authClient.useSession();
-  const sessionReady = useRef(false);
-  if (!isPending) {
-    sessionReady.current = true;
-  }
   const isAuthRoute = pathname === "/sign-in" || pathname === "/sign-up";
   const navigationTheme = {
     ...(themeName === "dark" ? DarkTheme : DefaultTheme),
@@ -61,7 +58,7 @@ export default function RootLayout() {
     </Stack>
   );
 
-  if (!sessionReady.current) {
+  if (isPending) {
     content = (
       <YStack flex={1} items="center" justify="center" bg="$background">
         <Paragraph>Loading session…</Paragraph>

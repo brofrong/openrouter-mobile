@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Platform, useColorScheme } from "react-native";
 import { TamaguiProvider, Theme } from "tamagui";
+
 import { tamaguiConfig } from "../../../tamagui.config";
 
 type ModalProviderProps = {

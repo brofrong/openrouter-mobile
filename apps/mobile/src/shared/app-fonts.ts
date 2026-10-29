@@ -12,17 +12,13 @@ export const APP_SANS_NATIVE = {
 } as const;
 
 const regular = require("../../assets/fonts/GolosText-Regular.ttf") as
-  | string
-  | number;
+  string | number;
 const medium = require("../../assets/fonts/GolosText-Medium.ttf") as
-  | string
-  | number;
+  string | number;
 const semiBold = require("../../assets/fonts/GolosText-SemiBold.ttf") as
-  | string
-  | number;
+  string | number;
 const bold = require("../../assets/fonts/GolosText-Bold.ttf") as
-  | string
-  | number;
+  string | number;
 
 const injectWebFontFaces = () => {
   if (Platform.OS !== "web" || typeof document === "undefined") {

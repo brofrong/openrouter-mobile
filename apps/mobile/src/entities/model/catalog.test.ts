@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   chatModelFromPicker,
   DEFAULT_CHAT_MODEL_ID,

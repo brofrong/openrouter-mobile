@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+
 import type { ModelIdentity } from "../../entities/model/identity";
 import {
   DEFAULT_IMAGE_MODEL_ID,
   type ImageModel,
-  type ImageModelOptions,
   imageModelFromPicker,
+  type ImageModelOptions,
   resolveImageModel,
   resolveImageOptions,
 } from "../../entities/model/image-catalog";

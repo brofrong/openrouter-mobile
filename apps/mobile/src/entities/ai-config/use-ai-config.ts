@@ -1,6 +1,7 @@
 import type { AiConfig, ChatKind } from "@openrouter-mobile/domain";
 import { Effect } from "effect";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+
 import { formatRpcError } from "../../shared/errors";
 import { RpcHttp } from "../../shared/rpc";
 import { mobileRuntime } from "../../shared/runtime";
@@ -66,9 +67,10 @@ export const useAiConfig = () => {
       });
   }, []);
 
+  // Call reload once on mount; reload is intentionally excluded from deps
   useEffect(() => {
     reload();
-  }, [reload]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setModel = useCallback((kind: ChatKind, model: string) => {
     setError(undefined);

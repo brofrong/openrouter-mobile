@@ -22,6 +22,7 @@ import {
 } from "react";
 import { Pressable } from "react-native";
 import { Paragraph, ScrollView, Spinner, Text } from "tamagui";
+
 import { useCategoryDefaultModel } from "../../entities/ai-config/use-ai-config";
 import { ChatMenu, ChatMenuButton } from "../../entities/chat/ChatMenu";
 import { ChatRenameDialog } from "../../entities/chat/ChatRenameDialog";
@@ -99,7 +100,10 @@ export function ChatScreen() {
   const loadedIdRef = useRef<ChatId | undefined>(undefined);
   const restoredIdRef = useRef<ChatId | undefined>(undefined);
   const selectedIdRef = useRef(selectedId);
-  selectedIdRef.current = selectedId;
+  // Keep ref in sync with prop to avoid stale closures in callbacks
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
   const navigation = useNavigation();
   const selectedChat = chats.find((chat) => chat.id === selectedId);
   const selectedTitle = selectedChat?.title;
@@ -584,6 +588,8 @@ export function ChatScreen() {
     ];
   }, [thread.draft, thread.messages]);
 
+  // Keep ref callback in sync with current state to avoid stale closures
+  // eslint-disable-next-line react-hooks/refs
   underfillRef.current = () => {
     if (hasMore && thread.messages.length > 0) {
       loadOlder();

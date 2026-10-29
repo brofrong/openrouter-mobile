@@ -18,6 +18,7 @@ import {
   XStack,
   YStack,
 } from "tamagui";
+
 import { UserAvatar } from "../../entities/user/UserAvatar";
 import { formatAppVersion } from "../../shared/app-version";
 import { authClient } from "../../shared/auth-client";

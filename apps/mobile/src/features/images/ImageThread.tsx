@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Image, Pressable } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
+
 import { SelectableText } from "../../shared/ui/SelectableText";
 import { UserBubble } from "../../shared/ui/UserBubble";
-import { ImagePreview } from "./ImagePreview";
 import { containedImageSize, THREAD_IMAGE_MAX_HEIGHT } from "./image-layout";
+import { ImagePreview } from "./ImagePreview";
 import {
   aspectRatioValue,
   type ImageAssistantItem,

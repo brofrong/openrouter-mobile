@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Paragraph, Spinner, Text, useTheme, XStack, YStack } from "tamagui";
+
 import { formatPlaybackClock } from "../media-source";
 import { resolvePlayableMediaUri } from "../resolve-media-uri";
 

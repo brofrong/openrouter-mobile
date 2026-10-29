@@ -1,8 +1,9 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
+
 import {
-  type MediaKind,
   mediaCacheFileName,
+  type MediaKind,
   parseMediaSource,
 } from "./media-source";
 

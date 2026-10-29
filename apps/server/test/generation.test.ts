@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   chats,
   generationJobs,
@@ -14,6 +15,7 @@ import {
 } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
 import { Effect, Layer, Result, type Scope, Stream } from "effect";
+
 import {
   createChat,
   listMessages,
@@ -34,12 +36,12 @@ import {
   OpenRouterMedia,
   OpenRouterMediaStubLive,
 } from "../src/features/generation/OpenRouterMedia";
+import { Auth, createAuth, type Session } from "../src/shared/auth";
 import {
   AuthMiddleware,
   AuthMiddlewareLive,
   CurrentSession,
 } from "../src/shared/AuthMiddleware";
-import { Auth, createAuth, type Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
 import {
   MemoryObjectStoreLive,

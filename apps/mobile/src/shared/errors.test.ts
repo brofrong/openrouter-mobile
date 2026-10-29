@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { formatRpcError } from "./errors";
 
 test("formatRpcError maps browser fetch failures to a reachable-server message", () => {

@@ -1,13 +1,15 @@
 import { expect, test } from "bun:test";
+
 import { user, userAiConfigs } from "@openrouter-mobile/db";
 import { eq } from "drizzle-orm";
 import { Effect, type Scope } from "effect";
+
 import {
   getAiConfig,
   setAiConfigModel,
 } from "../src/features/ai-config/AiConfigLive";
-import { CurrentSession } from "../src/shared/AuthMiddleware";
 import type { Session } from "../src/shared/auth";
+import { CurrentSession } from "../src/shared/AuthMiddleware";
 import { AppDb, DbLive } from "../src/shared/db";
 
 if (process.env.DATABASE_URL === undefined) {

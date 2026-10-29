@@ -11,6 +11,7 @@ import {
   XStack,
   YStack,
 } from "tamagui";
+
 import { ModalProvider } from "../../shared/ui/ModalProvider";
 
 type ChatRenameDialogProps = {

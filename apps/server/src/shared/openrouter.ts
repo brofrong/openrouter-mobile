@@ -58,8 +58,7 @@ export type OpenRouterImagePart = {
 };
 
 export type OpenRouterContent =
-  | string
-  | ReadonlyArray<OpenRouterTextPart | OpenRouterImagePart>;
+  string | ReadonlyArray<OpenRouterTextPart | OpenRouterImagePart>;
 
 export type OpenRouterTool = {
   readonly type: "function";

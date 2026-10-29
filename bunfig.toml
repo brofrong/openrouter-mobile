@@ -1,0 +1,23 @@
+[fmt]
+sortImports = true
+ignorePatterns = [
+  "packages/db/drizzle/",
+  "docs/",
+  ".cursor/",
+  "docker-compose.yml",
+]
+
+[lint.categories]
+correctness = "error"
+
+[lint.rules]
+# Empty interface extending another type is equivalent to its supertype
+"@typescript-eslint/no-empty-object-type" = "off"
+# Reanimated v3 requires modifying .value properties directly
+"react-hooks/immutability" = "off"
+# Promise callback patterns are common and intentional
+"promise/no-callback-in-promise" = "off"
+# Autofocus is intentional in some cases (loading states, modals)
+"jsx-a11y/no-autofocus" = "off"
+# Calling setState in effects is a common pattern for initialization
+"react-hooks/set-state-in-effect" = "off"

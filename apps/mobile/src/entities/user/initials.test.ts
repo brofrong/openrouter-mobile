@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { userInitials } from "./initials";
 
 test("userInitials uses the first letters of two name words", () => {

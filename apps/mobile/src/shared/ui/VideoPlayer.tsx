@@ -1,6 +1,7 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
+
 import { resolvePlayableMediaUri } from "../resolve-media-uri";
 
 const VIDEO_HEIGHT = 280;

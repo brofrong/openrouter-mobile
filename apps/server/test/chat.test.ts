@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   chats,
   generationJobs,
@@ -26,6 +27,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
+
 import { setAiConfigModel } from "../src/features/ai-config/AiConfigLive";
 import {
   createChat,
@@ -49,12 +51,12 @@ import {
   OpenRouterMedia,
   OpenRouterMediaStubLive,
 } from "../src/features/generation/OpenRouterMedia";
+import { Auth, createAuth, type Session } from "../src/shared/auth";
 import {
   AuthMiddleware,
   AuthMiddlewareLive,
   CurrentSession,
 } from "../src/shared/AuthMiddleware";
-import { Auth, createAuth, type Session } from "../src/shared/auth";
 import { AppDb, DbLive } from "../src/shared/db";
 import { McpClient, McpClientStubLive } from "../src/shared/mcp-client";
 import {

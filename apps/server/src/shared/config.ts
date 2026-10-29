@@ -1,4 +1,5 @@
 import { Config, Redacted } from "effect";
+
 import { DEFAULT_BASE_URL, trimTrailingSlash } from "./baseUrl";
 import { DEFAULT_OPENROUTER_MODEL } from "./openrouter";
 

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   ChatDoneEvent,
   ChatErrorEvent,
@@ -16,6 +17,7 @@ import {
   StoredChatFile,
 } from "@openrouter-mobile/domain";
 import { DateTime } from "effect";
+
 import {
   applyChatStreamEvent,
   commitDraft,

@@ -1,5 +1,6 @@
 import { Slot } from "expo-router";
 import { YStack } from "tamagui";
+
 import { ImagesScreen } from "../../../features/images/ImagesScreen";
 
 export default function ImagesLayout() {

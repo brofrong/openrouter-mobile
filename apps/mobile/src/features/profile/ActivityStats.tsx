@@ -1,5 +1,6 @@
 import type { UsageActivity } from "@openrouter-mobile/domain";
 import { Text, XStack, YStack } from "tamagui";
+
 import { formatUsd } from "./format-usage";
 
 export function ActivityStats(props: { readonly activity: UsageActivity }) {

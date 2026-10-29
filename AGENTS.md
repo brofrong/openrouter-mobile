@@ -3,6 +3,7 @@
 Read before writing code.
 
 ## Stack
+
 - Frontend: Expo SDK 57 (ios/android/web), Tamagui v5, Feature-Sliced Design
 - RPC: `effect/unstable/rpc` (NOT tRPC, NOT oRPC, NOT REST). `@effect/rpc` is not published on Effect 4 rc.
 - HTTP: `effect/unstable/http` (`HttpRouter`). Bun adapters: `BunHttpServer` / `BunRuntime` from `@effect/platform-bun`
@@ -11,6 +12,7 @@ Read before writing code.
 - Lint/format: Biome only — `bun run check` / `bun run check:fix`. Never ESLint or Prettier.
 
 ## Skills (read the matching one before touching that area)
+
 - Effect code → `.cursor/skills/effect-this-repo/SKILL.md` and `.cursor/rules/effect.mdc`
 - RPC / streams / reconnect → `.cursor/skills/effect-rpc-streams/SKILL.md`
 - Drizzle → `.cursor/skills/drizzle-rqb2/SKILL.md`
@@ -19,6 +21,7 @@ Read before writing code.
 - Auth → `.cursor/skills/better-auth/SKILL.md` and the official Better Auth skill pack at `.cursor/skills/better-auth-official/`
 
 ## Hard rules
+
 - OpenRouter API key never leaves `apps/server`
 - Every stream chunk is persisted to `stream_events` BEFORE PubSub publish
 - Reconnect protocol: subscribe live → replay DB `seq > afterSeq` → tail live, dedup by seq

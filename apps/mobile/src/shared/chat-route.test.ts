@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { chatHref, chatIdFromPathname, parseRouteChatId } from "./chat-route";
 
 test("chatHref builds a unique path per kind and id", () => {

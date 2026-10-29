@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
+
 import { Effect, Redacted } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+
 import {
   openRouterListModels,
   openRouterModelsUrl,
@@ -174,7 +176,13 @@ test("parseOpenRouterModelsPage skips entries without an id", () => {
 test("openRouterListModels reads a mocked models page", async () => {
   const seen: Array<string> = [];
   const mockFetch = (async (input: Parameters<typeof fetch>[0]) => {
-    seen.push(String(input));
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+          ? input.url
+          : input.toString();
+    seen.push(url);
     return new Response(
       JSON.stringify({
         data: [
@@ -224,7 +232,13 @@ test("openRouterListModels reads a mocked models page", async () => {
 test("openRouterListModels reads the dedicated image catalog and paginates locally", async () => {
   const seen: Array<string> = [];
   const mockFetch = (async (input: Parameters<typeof fetch>[0]) => {
-    seen.push(String(input));
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof Request
+          ? input.url
+          : input.toString();
+    seen.push(url);
     return new Response(
       JSON.stringify({
         data: [

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { toWebSocketBase, trimTrailingSlash, urlsFromBase } from "./env";
 
 test("trims trailing slashes from BASE_URL", () => {

@@ -1,9 +1,10 @@
 import type { ChatId } from "@openrouter-mobile/domain";
 import { type Href, usePathname, useRouter } from "expo-router";
+
 import {
-  type ChatRouteKind,
   chatHref,
   chatIdFromPathname,
+  type ChatRouteKind,
   pathnameBelongsToKind,
 } from "./chat-route";
 

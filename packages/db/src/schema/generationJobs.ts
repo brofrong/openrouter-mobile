@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
 import { user } from "./auth";
 import { chats } from "./chats";
 

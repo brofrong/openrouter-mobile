@@ -7,6 +7,7 @@ import {
   RpcSchema,
   RpcSerialization,
 } from "effect/unstable/rpc";
+
 import { authClient } from "./auth-client";
 import { rpcHttpUrl } from "./env";
 import { ExpoHttpLive } from "./http";

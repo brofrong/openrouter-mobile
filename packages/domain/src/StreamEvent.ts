@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 import { StreamId } from "./ids";
 
 export class StreamEvent extends Schema.Class<StreamEvent>("StreamEvent")({

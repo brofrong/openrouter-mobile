@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
+
 import { AppRpcs } from "@openrouter-mobile/rpc";
 import { RpcSchema } from "effect/unstable/rpc";
+
 import { withCookieOptions } from "./rpc-cookie";
 
 test("withCookieOptions puts the session cookie on RPC headers", () => {

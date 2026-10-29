@@ -1,5 +1,6 @@
 import { Slot } from "expo-router";
 import { YStack } from "tamagui";
+
 import { SpeechScreen } from "../../../features/speech/SpeechScreen";
 
 export default function SpeechLayout() {

@@ -1,4 +1,5 @@
 import { CHAT_TITLE_MAX_LENGTH } from "@openrouter-mobile/domain";
+
 import type { OpenRouterMessage } from "./openrouter";
 
 export const titleSummaryMessages = (

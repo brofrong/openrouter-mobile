@@ -14,11 +14,14 @@ permissions:
   contents: read
 
 jobs:
-  biome:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: biomejs/setup-biome@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 2.5.13
-      - run: biome check .
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun lint
+      - run: bun fmt --check
+      - run: bun check

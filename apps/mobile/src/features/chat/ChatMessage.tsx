@@ -6,6 +6,7 @@ import {
 import { createElement } from "react";
 import { Image, Linking, Platform, Pressable } from "react-native";
 import { Paragraph, Spinner, XStack, YStack } from "tamagui";
+
 import { formatFileSize } from "../../shared/format-file-size";
 import { CopyIconButton } from "../../shared/ui/CopyIconButton";
 import { MarkdownText } from "../../shared/ui/MarkdownText";

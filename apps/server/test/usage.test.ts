@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   chats,
   messages,
@@ -9,6 +10,7 @@ import {
 import { CatalogModelPage } from "@openrouter-mobile/domain";
 import { eq } from "drizzle-orm";
 import { Effect, Layer, type Scope, Stream } from "effect";
+
 import { createChat, sendMessage } from "../src/features/chat/ChatLive";
 import { OpenRouterChat } from "../src/features/chat/OpenRouterChat";
 import type { DurableStream } from "../src/features/durable-stream/DurableStream";
@@ -18,8 +20,8 @@ import {
   OpenRouterMediaStubLive,
 } from "../src/features/generation/OpenRouterMedia";
 import { summarizeUsage } from "../src/features/usage/UsageLive";
-import { CurrentSession } from "../src/shared/AuthMiddleware";
 import type { Session } from "../src/shared/auth";
+import { CurrentSession } from "../src/shared/AuthMiddleware";
 import { AppDb, DbLive } from "../src/shared/db";
 import { type McpClient, McpClientStubLive } from "../src/shared/mcp-client";
 import {

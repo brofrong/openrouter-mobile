@@ -1,5 +1,6 @@
 import { Image } from "react-native";
 import { Text, YStack } from "tamagui";
+
 import { userInitials } from "./initials";
 
 type UserAvatarProps = {

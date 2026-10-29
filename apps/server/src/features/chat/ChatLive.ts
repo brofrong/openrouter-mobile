@@ -1,7 +1,7 @@
 import { chats, messages } from "@openrouter-mobile/db";
 import {
-  AppError,
   aiConfigModel,
+  AppError,
   ChatDoneEvent,
   ChatErrorEvent,
   type ChatId,
@@ -25,6 +25,7 @@ import {
 import { ChatRpcs } from "@openrouter-mobile/rpc";
 import { and, eq } from "drizzle-orm";
 import { DateTime, Effect, Ref, Result, Schema, Stream } from "effect";
+
 import { AuthMiddleware, CurrentSession } from "../../shared/AuthMiddleware";
 import {
   persistChatSelection,
@@ -1288,10 +1289,10 @@ const maybeTitleFromFirstMessage = (options: {
     if (options.titleLocked) {
       return;
     }
+    const completeOpts =
+      options.model === undefined ? {} : { model: options.model };
     const collected = yield* options.openrouter
-      .complete(titleSummaryMessages(options.content), {
-        ...(options.model === undefined ? {} : { model: options.model }),
-      })
+      .complete(titleSummaryMessages(options.content), completeOpts)
       .pipe(
         Effect.flatMap(collectTitle),
         Effect.catchTag("AppError", () =>

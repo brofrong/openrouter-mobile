@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 import { ChatId, MessageId } from "./ids";
 
 export class Message extends Schema.Class<Message>("Message")({

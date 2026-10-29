@@ -439,9 +439,7 @@ export const resolveSpeechOptions = (
   current: SpeechModelOptions,
 ): SpeechModelOptions => {
   const voice = pickSupported(model.voices, current.voice, model.defaultVoice);
-  return {
-    ...(voice === undefined ? {} : { voice }),
-  };
+  return voice === undefined ? {} : { voice };
 };
 
 const catalogs: Record<

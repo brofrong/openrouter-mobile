@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { VideoToolOptions } from "@openrouter-mobile/domain";
+
 import {
   GENERATE_VIDEO_TOOL,
   GENERATE_VIDEO_TOOL_NAME,

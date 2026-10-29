@@ -1,6 +1,7 @@
 import type { AuthSettings } from "@openrouter-mobile/domain";
 import { Effect } from "effect";
 import { useCallback, useEffect, useState } from "react";
+
 import { formatRpcError } from "./errors";
 import { RpcHttp } from "./rpc";
 import { mobileRuntime } from "./runtime";

@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { CHAT_TITLE_MAX_LENGTH } from "@openrouter-mobile/domain";
+
 import {
   sanitizeChatTitle,
   titleSummaryMessages,

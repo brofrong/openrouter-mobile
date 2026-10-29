@@ -1,6 +1,7 @@
 import { type Href, Link, Redirect } from "expo-router";
 import { useState } from "react";
 import { Button, H2, Input, Paragraph, Text, YStack } from "tamagui";
+
 import { authClient } from "../shared/auth-client";
 import { useAuthSettings } from "../shared/auth-settings";
 import { formatRpcError } from "../shared/errors";

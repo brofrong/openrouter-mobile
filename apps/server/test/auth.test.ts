@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { createAuth } from "../src/shared/auth";
 import { oidcEndpointsFromIssuer } from "../src/shared/auth-options";
 

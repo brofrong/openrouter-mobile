@@ -1,5 +1,6 @@
 import type { AiConfig, ChatKind } from "@openrouter-mobile/domain";
 import { aiConfigModel } from "@openrouter-mobile/domain";
+
 import { DEFAULT_CHAT_MODEL_ID, resolveChatModel } from "../model/catalog";
 import type { ModelIdentity } from "../model/identity";
 import {

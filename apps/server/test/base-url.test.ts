@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+
 import { ConfigProvider, Effect } from "effect";
+
 import { trimTrailingSlash } from "../src/shared/baseUrl";
 import { AppConfig } from "../src/shared/config";
 import { corsAllowedOrigins, makeTrustedOrigins } from "../src/shared/origins";

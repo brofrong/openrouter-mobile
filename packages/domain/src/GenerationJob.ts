@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 import { ChatId, GenerationJobId, UserId } from "./ids";
 
 export class GenerationJob extends Schema.Class<GenerationJob>("GenerationJob")(

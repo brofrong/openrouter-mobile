@@ -2,6 +2,7 @@ import type { UsageHeatmapDay } from "@openrouter-mobile/domain";
 import { useMemo } from "react";
 import { ScrollView, View } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+
 import type { UsageMetric } from "./format-usage";
 
 const CELL = 10;

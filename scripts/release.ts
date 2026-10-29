@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+
 import { $ } from "bun";
 
 const ROOT = path.resolve(import.meta.dir, "..");

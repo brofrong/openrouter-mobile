@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { formatAppVersion } from "./app-version";
 
 test("formatAppVersion uses the given semver", () => {

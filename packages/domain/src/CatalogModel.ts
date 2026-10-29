@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 import { ReasoningEffort } from "./ReasoningEffort";
 
 export class CatalogModel extends Schema.Class<CatalogModel>("CatalogModel")({

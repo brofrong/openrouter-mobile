@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { Paragraph, Text, useTheme, XStack, YStack } from "tamagui";
-import { PickerShell } from "./ModelPicker";
+
 import type { SpeechModel, SpeechModelOptions } from "./media-catalog";
+import { PickerShell } from "./ModelPicker";
 import { speechVoiceLabel } from "./speech-voices";
 
 type SpeechOptionsSheetProps = {

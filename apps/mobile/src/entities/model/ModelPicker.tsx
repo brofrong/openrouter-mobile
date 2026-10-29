@@ -21,11 +21,12 @@ import {
   XStack,
   YStack,
 } from "tamagui";
+
 import { formatRpcError } from "../../shared/errors";
 import { ModalProvider } from "../../shared/ui/ModalProvider";
 import type { ModelIdentity } from "./identity";
-import { ProviderMark } from "./ModelChip";
 import { modelRowMeta } from "./model-meta";
+import { ProviderMark } from "./ModelChip";
 import { MODEL_PAGE_SIZE, paginateModels } from "./paginate-models";
 
 export type PickerModel = ModelIdentity & {
@@ -151,12 +152,15 @@ export function ModelPicker({
           paginateModels(models ?? [], args.query, args.offset, args.limit),
         )),
   );
-  loadRef.current =
-    loadPage ??
-    ((args) =>
-      Promise.resolve(
-        paginateModels(models ?? [], args.query, args.offset, args.limit),
-      ));
+  // Keep ref in sync with props to avoid stale closures in callbacks
+  useEffect(() => {
+    loadRef.current =
+      loadPage ??
+      ((args) =>
+        Promise.resolve(
+          paginateModels(models ?? [], args.query, args.offset, args.limit),
+        ));
+  }, [loadPage, models]);
 
   const fetchPage = useCallback(
     async (nextQuery: string, offset: number, append: boolean) => {
@@ -243,7 +247,6 @@ export function ModelPicker({
             onSelect(item);
           }}
           size="$4"
-          text="left"
           width="100%"
         >
           <XStack flex={1} items="center" justify="space-between" width="100%">

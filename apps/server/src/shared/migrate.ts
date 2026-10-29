@@ -1,5 +1,6 @@
 import { migrateEffect } from "@openrouter-mobile/db/migrate";
 import { Effect } from "effect";
+
 import { AppDb } from "./db";
 
 export const applyMigrations = Effect.gen(function* () {

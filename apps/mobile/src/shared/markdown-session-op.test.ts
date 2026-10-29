@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { nextMarkdownSessionOp } from "./markdown-session-op";
 
 test("nextMarkdownSessionOp is a noop when content is unchanged", () => {

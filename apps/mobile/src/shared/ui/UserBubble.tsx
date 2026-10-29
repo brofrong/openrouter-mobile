@@ -8,14 +8,7 @@ type UserBubbleProps = {
 export function UserBubble({ children }: UserBubbleProps) {
   return (
     <XStack justify="flex-end" mb="$3">
-      <YStack
-        width="80%"
-        p="$3"
-        bg="#122450"
-        rounded="$4"
-        select="text"
-        color="#f8fafc"
-      >
+      <YStack width="80%" p="$3" bg="#122450" rounded="$4" select="text">
         {children}
       </YStack>
     </XStack>

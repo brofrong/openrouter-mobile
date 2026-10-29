@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { formatFileSize } from "./format-file-size";
 
 test("formatFileSize uses bytes, KB, and MB", () => {

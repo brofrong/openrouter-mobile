@@ -1,5 +1,6 @@
 import { StoredChatFile } from "@openrouter-mobile/domain";
 import { Platform } from "react-native";
+
 import { type NativeUploadFile, uploadMediaFile } from "../upload-media";
 
 const FILE_ACCEPT =

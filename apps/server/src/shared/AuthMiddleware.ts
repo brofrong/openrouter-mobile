@@ -2,6 +2,7 @@ import { AppError } from "@openrouter-mobile/domain";
 import { Context, Effect, Layer } from "effect";
 import type { Headers } from "effect/unstable/http/Headers";
 import { RpcMiddleware } from "effect/unstable/rpc";
+
 import { Auth, type Session } from "./auth";
 
 export class CurrentSession extends Context.Service<CurrentSession, Session>()(

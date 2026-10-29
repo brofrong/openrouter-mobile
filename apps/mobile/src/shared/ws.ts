@@ -2,6 +2,7 @@ import { Effect, Layer } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { Platform } from "react-native";
+
 import { authClient } from "./auth-client";
 import { rpcWsUrl } from "./env";
 

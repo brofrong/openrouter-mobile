@@ -1,15 +1,16 @@
 import type { ChatKind, OutputModality } from "@openrouter-mobile/domain";
 import { useState } from "react";
 import { Button, H3, Paragraph, ScrollView, Spinner, YStack } from "tamagui";
+
 import {
   AI_CONFIG_CATEGORIES,
   resolveCategoryModel,
 } from "../../entities/ai-config/defaults";
 import { useAiConfig } from "../../entities/ai-config/use-ai-config";
 import { loadCatalogPage } from "../../entities/model/load-catalog-page";
+import { mediaModelsFor } from "../../entities/model/media-catalog";
 import { ModelChip } from "../../entities/model/ModelChip";
 import { ModelPicker } from "../../entities/model/ModelPicker";
-import { mediaModelsFor } from "../../entities/model/media-catalog";
 
 const catalogModality = (kind: ChatKind): OutputModality | undefined => {
   switch (kind) {

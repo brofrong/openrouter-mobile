@@ -6,13 +6,14 @@ import {
 } from "@openrouter-mobile/domain";
 import { Context, Effect, Layer, type Stream } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+
 import { AppConfig } from "../../shared/config";
 import {
   isUsableOpenRouterKey,
   type OpenRouterMessage,
   type OpenRouterStreamPart,
-  type OpenRouterTool,
   openRouterTokenStream,
+  type OpenRouterTool,
 } from "../../shared/openrouter";
 import { openRouterListModels } from "../../shared/openrouter-models";
 

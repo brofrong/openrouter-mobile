@@ -1,5 +1,6 @@
 import { fetch as expoFetch } from "expo/fetch";
 import { Platform } from "react-native";
+
 import { authClient } from "./auth-client";
 import { authUrl } from "./env";
 

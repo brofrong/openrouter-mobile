@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
+
 import { streamEvents } from "@openrouter-mobile/db";
 import { eq } from "drizzle-orm";
 import { Effect, Fiber, Layer, type Scope, Stream } from "effect";
+
 import { DurableStream } from "../src/features/durable-stream/DurableStream";
 import { DurableStreamLive } from "../src/features/durable-stream/DurableStreamLive";
 import { AppDb, DbLive } from "../src/shared/db";

@@ -1,5 +1,6 @@
 import type { Effect, Stream } from "effect";
 import { useEffect, useRef } from "react";
+
 import { resumeRpcStream } from "./resume-rpc-stream";
 import type { RpcHttp, RpcWs } from "./rpc";
 import { mobileRuntime } from "./runtime";
@@ -27,9 +28,12 @@ export const useRpcStream = <A extends StreamChunk, E>(
   const onChunkRef = useRef(options.onChunk);
   const onErrorRef = useRef(options.onError);
   const makeRef = useRef(options.make);
-  onChunkRef.current = options.onChunk;
-  onErrorRef.current = options.onError;
-  makeRef.current = options.make;
+  // Keep refs in sync with props to avoid stale closures in effect
+  useEffect(() => {
+    onChunkRef.current = options.onChunk;
+    onErrorRef.current = options.onError;
+    makeRef.current = options.make;
+  }, [options.onChunk, options.onError, options.make]);
 
   useEffect(() => {
     if (!enabled || key.length === 0) {

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { hrefForMarkdownLink } from "./markdown-link";
 
 test("hrefForMarkdownLink keeps http(s) and mailto links", () => {

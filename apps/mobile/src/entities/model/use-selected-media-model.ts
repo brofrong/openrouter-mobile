@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import type { ModelIdentity } from "./identity";
+
 import {
   type MediaModel,
   type MediaModelKind,
   resolveMediaModel,
   resolveSpeechOptions,
   resolveVideoOptions,
-  type SpeechModelOptions,
   speechModelFromPicker,
-  type VideoModelOptions,
+  type SpeechModelOptions,
   videoModelFromPicker,
+  type VideoModelOptions,
 } from "./media-catalog";
 
 export type MediaModelOptions = VideoModelOptions & SpeechModelOptions;
@@ -48,7 +48,7 @@ export const useSelectedMediaModel = (
     ...speechResolved,
   };
 
-  const selectModel = (next: MediaModel | ModelIdentity | string) => {
+  const selectModel = (next: MediaModel | string) => {
     const selected =
       typeof next === "string"
         ? resolveMediaModel(kind, next)

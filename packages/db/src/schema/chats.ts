@@ -1,4 +1,5 @@
 import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
 import { user } from "./auth";
 
 export const chats = pgTable("chats", {

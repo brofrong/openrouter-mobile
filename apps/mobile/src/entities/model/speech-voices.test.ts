@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { speechVoiceLabel } from "./speech-voices";
 
 test("speechVoiceLabel turns provider ids into short labels", () => {

@@ -1,6 +1,7 @@
 import type { ReasoningEffort } from "@openrouter-mobile/domain";
 import { Pressable, View } from "react-native";
 import { Text, XStack } from "tamagui";
+
 import type { ModelIdentity } from "./identity";
 
 type ProviderMarkProps = {

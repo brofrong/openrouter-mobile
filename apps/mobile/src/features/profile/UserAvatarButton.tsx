@@ -1,5 +1,6 @@
 import { type Href, useRouter } from "expo-router";
 import { Pressable } from "react-native";
+
 import { UserAvatar } from "../../entities/user/UserAvatar";
 import { authClient } from "../../shared/auth-client";
 

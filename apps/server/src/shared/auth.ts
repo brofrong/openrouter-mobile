@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { expo } from "@better-auth/expo";
 import {
@@ -11,10 +12,11 @@ import {
 import { betterAuth } from "better-auth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { Context, Effect, Layer } from "effect";
+
 import {
   OIDC_PROVIDER_ID,
-  type OidcSettings,
   oidcIncompleteMessage,
+  type OidcSettings,
   resolveOidcFromConfig,
 } from "./auth-options";
 import { DEFAULT_BASE_URL } from "./baseUrl";

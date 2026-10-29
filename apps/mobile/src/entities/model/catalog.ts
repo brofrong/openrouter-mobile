@@ -1,4 +1,5 @@
 import type { ReasoningEffort } from "@openrouter-mobile/domain";
+
 import { type ModelIdentity, unknownModelIdentity } from "./identity";
 
 export type ChatModel = ModelIdentity & {

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+
 import type { ChatKind } from "./Chat";
 
 export class AiConfig extends Schema.Class<AiConfig>("AiConfig")({

@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+
 import { type NativeUploadFile, uploadMediaFile } from "../upload-media";
 
 const pickImageWeb = (): Promise<File | undefined> =>
