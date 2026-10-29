@@ -25,7 +25,7 @@ jobs:
         with:
           bun-version: canary # bun lint is only in canary for now
       - run: bun install --frozen-lockfile
-      - run: which bun && bun --version
+      - run: bun --revision # canary builds change under the same version
       - run: bun lint
       - run: bun fmt --check
       - run: bun check
